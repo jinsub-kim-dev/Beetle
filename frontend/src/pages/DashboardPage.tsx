@@ -1,0 +1,183 @@
+import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import { AmountText } from '@/components/common/AmountText'
+import { QueryState } from '@/components/common/QueryState'
+import { PeriodSelector } from '@/components/layout/PeriodSelector'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { expenseNatureSlices, formatTooltipAmount } from '@/features/analytics/chartData'
+import {
+  useExpenseNatureBreakdown,
+  usePeriodSummary,
+  useUpcomingBills,
+} from '@/features/analytics/queries'
+import { useTransactions } from '@/features/transactions/queries'
+import { useCategoryMap } from '@/features/categories/queries'
+import { dateBasisLabel, formatKrw, formatMonthDay, formatPercentage } from '@/lib/format'
+import { shiftYearMonth } from '@/lib/period'
+import { usePeriodParams, usePeriodStore } from '@/store/periodStore'
+
+const NATURE_COLORS = ['var(--color-fixed-expense)', 'var(--color-variable-expense)']
+
+/**
+ * 대시보드: 이번 달 요약, 고정비/변동비 비중, 최근 거래.
+ */
+export function DashboardPage() {
+  const params = usePeriodParams()
+  const yearMonth = usePeriodStore((state) => state.yearMonth)
+
+  const summary = usePeriodSummary(params)
+  const nature = useExpenseNatureBreakdown(params)
+  // 청구 예정액은 "다음 달에 나갈 돈" 이 관심사이므로 다음 달을 본다.
+  const upcoming = useUpcomingBills(shiftYearMonth(yearMonth, 1))
+  const transactions = useTransactions(params)
+
+  const categories = useCategoryMap()
+  const slices = nature.data ? expenseNatureSlices(nature.data) : []
+  const recent = (transactions.data ?? []).slice(0, 8)
+
+  return (
+    <div className="space-y-6">
+      <PeriodSelector />
+
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <Card>
+          <CardHeader>
+            <CardTitle>수입</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AmountText amount={summary.data?.income ?? 0} tone="income" className="text-xl" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>지출</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AmountText amount={summary.data?.expense ?? 0} tone="expense" className="text-xl" />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>수지</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AmountText
+              amount={summary.data?.balance ?? 0}
+              signed
+              tone="auto"
+              className="text-xl"
+            />
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>다음 달 청구 예정</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <AmountText
+              amount={upcoming.data?.unsettledExpense ?? 0}
+              tone="expense"
+              className="text-xl"
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              아직 출금되지 않은 금액입니다.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>고정비 / 변동비 비중</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QueryState
+              isPending={nature.isPending}
+              error={nature.error}
+              isEmpty={slices.length === 0}
+              emptyMessage="이 기간에 집계할 지출이 없습니다."
+            >
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={slices}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={85}
+                      // 애니메이션을 끈다. 대시보드는 즉시 읽혀야 하고,
+                      // Recharts 의 진입 애니메이션이 끝나지 않으면 마크가 보이지 않는다.
+                      isAnimationActive={false}
+                    >
+                      {slices.map((slice, index) => (
+                        <Cell key={slice.name} fill={NATURE_COLORS[index % NATURE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={formatTooltipAmount} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="mt-2 space-y-1">
+                {slices.map((slice, index) => (
+                  <li key={slice.name} className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <span
+                        className="inline-block size-2.5 rounded-full"
+                        style={{ backgroundColor: NATURE_COLORS[index % NATURE_COLORS.length] }}
+                      />
+                      {slice.name}
+                    </span>
+                    <span className="text-muted-foreground">
+                      {formatKrw(slice.value)} · {formatPercentage(slice.percentage)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </QueryState>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>최근 거래 ({dateBasisLabel(params.basis)} 기준)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QueryState
+              isPending={transactions.isPending}
+              error={transactions.error}
+              isEmpty={recent.length === 0}
+              emptyMessage="이 기간에 등록된 거래가 없습니다."
+            >
+              <ul className="divide-y">
+                {recent.map((transaction) => (
+                  <li key={transaction.id} className="flex items-center justify-between py-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {categories.get(transaction.categoryId)?.name ?? '분류 없음'}
+                        {transaction.memo && (
+                          <span className="ml-2 text-xs text-muted-foreground">
+                            {transaction.memo}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        소비 {formatMonthDay(transaction.spentDate)} · 청구{' '}
+                        {formatMonthDay(transaction.billDate)}
+                        {!transaction.settled && ' · 미출금'}
+                      </p>
+                    </div>
+                    <AmountText amount={transaction.amount} className="text-sm" />
+                  </li>
+                ))}
+              </ul>
+            </QueryState>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}

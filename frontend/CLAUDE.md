@@ -1,0 +1,105 @@
+# Beetle Frontend 프로젝트 가이드라인
+
+## 1. 프로젝트 개요
+- **기술 스택:** React, Vite, TypeScript, Tailwind CSS, shadcn/ui (또는 Radix UI), TanStack Query, Zustand, Recharts (또는 Chart.js)
+- **아키텍처:** 컴포넌트 기반 SPA 구조, 기능별 모듈화 (Feature-based 또는 Layered 구조)
+
+---
+
+## 2. 권장 디렉토리 구조 예시 (`frontend/src/`)
+```text
+frontend/src/
+ ┣ components/             # 공통 UI 컴포넌트 (Button, Input, Modal, Table 등)
+ ┣ features/               # 도메인별 기능 모듈 (transactions, categories, analytics 등)
+ │   ┣ transactions/       # 거래 내역 관련 컴포넌트, hooks, API 함수
+ │   ┣ categories/         # 카테고리 관리 관련
+ │   ┗ analytics/          # 통계 및 차트 관련
+ ┣ hooks/                  # 공통 커스텀 훅
+ ┣ store/                  # 전역 상태 관리 (Zustand)
+ ┣ api/                    # 백엔드 API 연동 클라이언트 설정 (Axios / Fetch)
+ ┣ types/                  # TypeScript 공통 타입 및 인터페이스 정의
+ ┣ lib/                    # 프레임워크에 독립적인 순수 로직 (포맷터, 기간 계산, cn 유틸)
+ ┣ pages/                  # 페이지 단위 컴포넌트 (Dashboard, Transactions, Settings 등)
+ ┣ test/                   # 테스트 설정 (setup.ts)
+ ┗ App.tsx
+```
+
+> `lib/` 은 shadcn/ui 규약(`@/lib/utils` 의 `cn`)이 요구하는 위치이기도 하고,
+> **테스트 가능한 순수 로직을 모아 두는 자리**다. 포맷터·기간 계산처럼 React 에
+> 의존하지 않는 로직은 컴포넌트에 두지 않고 이곳으로 옮긴다.
+
+---
+
+## 3. 핵심 개발 원칙 (Frontend Guidelines)
+1. **TypeScript 타입 안정성:**
+   - 백엔드 API 응답 및 요청 데이터에 대해 철저하게 타입을 정의하고 `any` 사용을 지배적으로 배제합니다.
+   - 도메인 모델(거래 내역, 카테고리, 결제 수단, 할부 계획 등)의 타입은 백엔드 스펙(`BEETLE_PRD.md`)과 일치시킵니다.
+2. **상태 관리 분리:**
+   - **서버 상태(Server State):** 거래 내역 목록, 통계 데이터 등은 `TanStack Query (React Query)`를 사용하여 캐싱, 페칭, 낙관적 업데이트(Optimistic Update)를 관리합니다.
+   - **클라이언트 상태(Client State):** 모달 오픈 여부, 사이드바 토글, 필터 조건 등 UI 상태는 가벼운 `Zustand`로 관리합니다.
+3. **UI 및 스타일링:**
+   - `Tailwind CSS`를 활용하여 빠르고 일관된 디자인 시스템을 구축합니다.
+   - Tailwind CSS v4 는 **CSS 우선 설정**을 사용합니다. `tailwind.config.js` 를 만들지 않고
+     `src/index.css` 의 `@theme` 에 토큰을 정의합니다.
+   - 입력 폼, 모달, 표(Table) 등은 재사용 가능한 컴포넌트로 분리하여 생산성을 높입니다.
+   - **차트에는 `isAnimationActive={false}` 를 지정합니다.** Recharts 의 진입 애니메이션이
+     완료되지 않으면 막대/조각이 보이지 않는 상태로 멈춥니다. 대시보드는 즉시 읽혀야 하므로
+     애니메이션 이득도 없습니다.
+4. **날짜 및 금액 처리:**
+   - 소비일(`spentDate`)과 청구일(`billDate`)의 차이를 사용자가 직관적으로 인지할 수 있도록 UI에 명확히 표기합니다.
+   - 금액 표시는 원화(KRW) 포맷(`toLocaleString()`)을 적용하여 가독성을 높입니다.
+
+---
+
+## 4. 핵심 화면 구성 (UI Pages)
+- **대시보드 (Dashboard):** 이번 달 요약, 고정비/변동비 비중 도넛 차트, 최근 거래 리스트
+- **거래 내역 (Transactions):** 월별/조건별 필터, 테이블 뷰, 빠른 거래 등록 모달 (소비일/청구일 분리 입력)
+- **통계 및 분석 (Analytics):** 기간별 소비 추이 바 차트, 카드사별 점유율, 할부 현황판
+- **설정 (Settings):** 고정비/변동비 카테고리 관리, 결제 수단(카드사/계좌) 등록 관리
+
+---
+
+## 5. 테스트 정책 (필수)
+
+루트 `CLAUDE.md` 3.2절은 **전 영역 공통**으로 적용됩니다. 프론트엔드도 예외가 아닙니다.
+
+### 5.1 무엇을 테스트하는가
+- **순수 로직은 반드시 테스트합니다.** `lib/` 의 포맷터·기간 계산, `store/` 의 상태 전이,
+  `features/*/chartData.ts` 의 데이터 변환이 대상입니다. 테스트 없이 추가하거나 변경하지 않습니다.
+- 정상 케이스만으로는 불충분합니다. **월말·윤년 보정, 금액 합계 보존, 빈 배열, 잘못된 형식**
+  같은 경계 조건을 반드시 포함합니다.
+- 렌더링만 확인하는 얕은 컴포넌트 테스트는 우선순위가 낮습니다. 로직을 컴포넌트에서
+  `lib/` 로 끌어내 순수 함수로 검증하는 것이 먼저입니다.
+
+### 5.2 도구와 커버리지
+| 대상 | 도구 | 요구 수준 |
+|---|---|---|
+| `lib/`, `store/` 순수 로직 | Vitest | **분기·함수·라인 커버리지 90% 이상** (`vitest.config.ts` 에서 강제) |
+| 데이터 변환 (`features/*/chartData.ts`) | Vitest | 합계 보존 등 핵심 성질 검증 |
+| 컴포넌트 상호작용 | Vitest + Testing Library (jsdom) | 필요한 곳에만 |
+
+- 커버리지 임계값은 `vitest.config.ts` 의 `thresholds` 로 강제합니다. 기준 미달이면
+  `npm run test:coverage` 가 실패합니다.
+- 작업 완료를 보고하기 전에 `npm run check` 가 통과해야 합니다. 실패한 경우 실패 사실과
+  출력을 그대로 보고합니다.
+
+### 5.3 테스트 작성 규칙
+- `describe` / `it` 설명은 한국어 서술형으로 씁니다. 예: `it('윤년 2월은 29일까지다')`
+- 경계값이 여러 개면 `it.each` 로 표 형태로 검증합니다.
+- 스토어 테스트는 `beforeEach` 에서 `setState` 로 초기 상태를 고정합니다.
+
+---
+
+## 6. 빌드 및 개발 명령어 (`frontend` 디렉토리 기준)
+- **개발 서버 실행:** `npm run dev` (백엔드로 `/api` 프록시. 대상은 `VITE_API_PROXY_TARGET`)
+- **프로덕션 빌드:** `npm run build` (타입 검사 후 빌드)
+- **타입 검사:** `npm run tsc`
+- **린트:** `npm run lint` / `npm run lint:fix`
+- **포맷:** `npm run format`
+- **테스트:** `npm run test` / `npm run test:watch` / `npm run test:coverage`
+- **전체 검증:** `npm run check` (타입 + 린트 + 테스트)
+
+### 6.1 패키지 레지스트리
+프로젝트 로컬 `.npmrc` 가 공개 npm 레지스트리를 명시합니다. 전역 `~/.npmrc` 가 사내 사설
+레지스트리를 가리키는 환경에서도 개인 프로젝트의 설치가 실패하지 않도록 하기 위한 것입니다.
+이 파일을 지우지 마십시오.

@@ -1,0 +1,184 @@
+/**
+ * 백엔드 요청/응답 DTO 타입.
+ */
+import type {
+  CategoryType,
+  DateBasis,
+  ExpenseNature,
+  IsoDate,
+  PaymentMethodType,
+  YearMonthString,
+} from './domain'
+
+// --- 오류 응답 ---
+
+export interface FieldErrorDetail {
+  field: string
+  message: string
+}
+
+/**
+ * 통일된 오류 응답.
+ *
+ * `code` 로 분기한다.
+ * - `VALIDATION_FAILED`: 요청 필드 검증 실패 (`fieldErrors` 존재)
+ * - `INVARIANT_VIOLATION`: 도메인 불변식 위반
+ * - `DOMAIN_STATE_CONFLICT`: 현재 상태에서 허용되지 않는 요청
+ * - `RESOURCE_NOT_FOUND`: 대상 없음
+ * - `MISSING_PARAMETER` / `INVALID_PARAMETER` / `MALFORMED_REQUEST`: 요청 형식 오류
+ */
+export interface ApiErrorResponse {
+  code: string
+  message: string
+  fieldErrors?: FieldErrorDetail[]
+}
+
+// --- 카테고리 ---
+
+export interface RegisterCategoryRequest {
+  name: string
+  type: CategoryType
+  nature?: ExpenseNature
+}
+
+export interface UpdateCategoryRequest {
+  name?: string
+  nature?: ExpenseNature
+}
+
+// --- 결제 수단 ---
+
+export interface RegisterPaymentMethodRequest {
+  name: string
+  type: PaymentMethodType
+  paymentDay?: number
+  closingDay?: number
+}
+
+export interface UpdatePaymentMethodRequest {
+  name?: string
+  paymentDay?: number
+  closingDay?: number
+  /** `true` 면 마감일을 미설정 상태로 되돌린다. */
+  clearClosingDay?: boolean
+}
+
+// --- 거래 내역 ---
+
+export interface RegisterTransactionRequest {
+  categoryId: number
+  paymentMethodId: number
+  amount: number
+  spentDate: IsoDate
+  memo?: string
+  /** 생략하면 결제 수단의 결제 조건으로부터 서버가 산출한다. */
+  billDate?: IsoDate
+  settled?: boolean
+  excludedFromStats?: boolean
+}
+
+export interface UpdateTransactionRequest {
+  categoryId?: number
+  amount?: number
+  memo?: string
+  /** `true` 면 메모를 삭제한다. */
+  clearMemo?: boolean
+  /** 소비일을 바꾸면 청구일도 서버가 다시 산출한다. */
+  spentDate?: IsoDate
+}
+
+export interface TransactionSearchParams {
+  basis: DateBasis
+  from: IsoDate
+  to: IsoDate
+  categoryId?: number
+  paymentMethodId?: number
+}
+
+// --- 할부 계획 ---
+
+export interface RegisterInstallmentPlanRequest {
+  categoryId: number
+  paymentMethodId: number
+  totalAmount: number
+  installmentMonths: number
+  merchant: string
+  spentDate: IsoDate
+}
+
+export interface CancelInstallmentPlanResponse {
+  deletedPartCount: number
+  keptSettledPartCount: number
+  /** 정산 완료 회차가 남아 있으면 `false` 다. */
+  planDeleted: boolean
+}
+
+// --- 통계 ---
+
+export interface PeriodParams {
+  basis: DateBasis
+  from: IsoDate
+  to: IsoDate
+}
+
+export interface PeriodSummary {
+  income: number
+  expense: number
+  transfer: number
+  /** 수지. 지출이 수입보다 많으면 음수다. */
+  balance: number
+  transactionCount: number
+}
+
+export interface CategoryBreakdownItem {
+  categoryId: number
+  categoryName: string
+  type: CategoryType
+  nature?: ExpenseNature
+  total: number
+  transactionCount: number
+  sharePercentage: number
+}
+
+export interface CategoryBreakdown {
+  total: number
+  items: CategoryBreakdownItem[]
+}
+
+export interface PaymentMethodBreakdownItem {
+  paymentMethodId: number
+  paymentMethodName: string
+  type: PaymentMethodType
+  total: number
+  transactionCount: number
+  sharePercentage: number
+}
+
+export interface PaymentMethodBreakdown {
+  totalExpense: number
+  items: PaymentMethodBreakdownItem[]
+}
+
+export interface ExpenseNatureBreakdownItem {
+  nature: ExpenseNature
+  total: number
+  transactionCount: number
+  sharePercentage: number
+}
+
+export interface ExpenseNatureBreakdown {
+  totalExpense: number
+  items: ExpenseNatureBreakdownItem[]
+}
+
+export interface UpcomingBills {
+  month: YearMonthString
+  unsettledExpense: number
+}
+
+export interface MonthlySummary {
+  month: YearMonthString
+  income: number
+  expense: number
+  balance: number
+}

@@ -51,9 +51,13 @@
 docker-compose up --build -d
 ```
 
+- **웹 화면: http://localhost:5173**
 - 백엔드: http://localhost:8080
 - API 문서: http://localhost:8080/swagger-ui.html
 - 헬스체크: http://localhost:8080/actuator/health
+
+프론트엔드 컨테이너의 nginx 가 `/api` 를 백엔드로 프록시하므로, 브라우저는 하나의
+오리진만 보게 되고 CORS 설정이 필요하지 않습니다.
 
 종료:
 ```bash
@@ -68,14 +72,16 @@ docker-compose down
 
 ```bash
 cp .env.example .env
-# .env 에서 BACKEND_PORT=18080 등으로 수정
+# .env 에서 FRONTEND_PORT=15173, BACKEND_PORT=18080 등으로 수정
 docker-compose up -d
 ```
 
 > 8080 포트를 다른 프로세스가 점유하고 있으면 컨테이너는 정상 기동하지만 호스트에서
 > 접근이 되지 않는다. `lsof -nP -iTCP:8080 -sTCP:LISTEN` 으로 확인할 수 있다.
 
-### 로컬 개발 (DB만 Docker, 앱은 IDE에서 실행)
+### 로컬 개발
+
+백엔드만 IDE 에서 실행:
 ```bash
 docker-compose up -d mysql
 cd backend && ./gradlew bootRun
@@ -83,15 +89,27 @@ cd backend && ./gradlew bootRun
 `application.yml` 의 DataSource 는 환경 변수 기반이며 기본값이 `localhost:3306` 이므로
 추가 설정 없이 붙는다.
 
+프론트엔드를 Vite 개발 서버(HMR)로 실행:
+```bash
+docker-compose up -d mysql backend
+cd frontend && npm install && npm run dev
+```
+Vite 가 `/api` 를 `http://localhost:8080` 으로 프록시한다. 백엔드 포트를 바꿨다면
+`frontend/.env` 의 `VITE_API_PROXY_TARGET` 도 맞춘다.
+
 ---
 
 ## 3. 테스트
 
 ```bash
-cd backend
-./gradlew test    # 전체 테스트
-./gradlew check   # 테스트 + 도메인 커버리지 검증
+cd backend && ./gradlew check
 ```
+```bash
+cd frontend && npm run check
+```
+
+- `./gradlew check` = 테스트 + 도메인 커버리지 검증
+- `npm run check` = 타입 검사 + 린트 + 테스트
 
 - 통합 테스트는 Testcontainers 로 **실제 MySQL** 을 띄운다. Docker 가 실행 중이어야 한다.
   (Rancher Desktop·Colima 의 소켓 경로는 Gradle 이 자동 탐지한다)
@@ -105,6 +123,8 @@ cd backend
 | `DomainModelConventionTest` | 애그리거트 루트의 `data class` 금지, 식별자 기반 동일성 |
 | `MockKValueClassConventionTest` | 값 객체 파라미터에 `any()` 매처 사용 금지 (flaky 테스트 방지) |
 | JaCoCo 커버리지 검증 | 도메인 레이어 분기 커버리지 90% 이상 |
+| Vitest `thresholds` (frontend) | `lib/`·`store/` 순수 로직 커버리지 90% 이상 |
+| ESLint `no-explicit-any` (frontend) | `any` 배제 |
 
 ---
 
@@ -113,14 +133,29 @@ cd backend
 ```text
 Beetle/
  ┣ BEETLE_PRD.md      기획 및 요구사항 정의서
- ┣ docker-compose.yml MySQL + 백엔드 통합 실행
+ ┣ docker-compose.yml MySQL + 백엔드 + 프론트엔드 통합 실행
  ┣ backend/           Spring Boot 4 + Kotlin (클린 아키텍처 + DDD)
- ┗ frontend/          추후 확장
+ ┗ frontend/          React + Vite + TypeScript (Tailwind, TanStack Query, Zustand)
 ```
 
 백엔드는 `domain` → `application` → `infrastructure`/`presentation` 4계층이며,
 도메인은 프레임워크에 의존하지 않는다. 자세한 규칙은
 [backend/CLAUDE.md](backend/CLAUDE.md) 를 참고한다.
+
+프론트엔드는 기능별 모듈(`features/`) 구조이며, 서버 상태는 TanStack Query,
+UI 상태는 Zustand 로 분리한다. 청구일 산출 같은 도메인 계산은 프론트에서 다시
+구현하지 않고 서버가 계산한 값을 표시한다. 자세한 규칙은
+[frontend/CLAUDE.md](frontend/CLAUDE.md) 를 참고한다.
+
+### 화면
+| 화면 | 내용 |
+|---|---|
+| 대시보드 | 이번 달 수입/지출/수지, 다음 달 청구 예정액, 고정비·변동비 도넛, 최근 거래 |
+| 거래 내역 | 소비일과 청구일을 나란히 보여주는 표, 출금 완료 토글 |
+| 통계·분석 | 최근 6개월 추이 바 차트, 카테고리·카드별 점유율, 할부 현황 |
+| 설정 | 카테고리(고정비/변동비), 결제 수단 목록 |
+
+모든 화면 상단의 **소비일 기준 / 청구일 기준** 토글로 두 집계 축을 전환한다.
 
 ---
 
