@@ -10,6 +10,7 @@ import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.PaymentMethodType
 import com.example.beetle.domain.repository.PaymentMethodRepository
+import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.fixture.cash
 import com.example.beetle.fixture.creditCard
 import io.mockk.confirmVerified
@@ -27,7 +28,9 @@ import org.junit.jupiter.api.Test
 class PaymentMethodServiceTest {
 
     private val paymentMethodRepository = mockk<PaymentMethodRepository>()
-    private val paymentMethodService = PaymentMethodService(paymentMethodRepository)
+    private val transactionRepository = mockk<TransactionRepository>()
+    private val paymentMethodService =
+        PaymentMethodService(paymentMethodRepository, transactionRepository)
 
     @Nested
     @DisplayName("등록")
@@ -303,9 +306,10 @@ class PaymentMethodServiceTest {
         }
 
         @Test
-        fun `존재하는 결제 수단을 삭제한다`() {
+        fun `사용 중인 거래가 없으면 삭제한다`() {
             // given
             every { paymentMethodRepository.findById(PaymentMethodId(1L)) } returns cash(id = 1L)
+            every { transactionRepository.existsByPaymentMethodId(PaymentMethodId(1L)) } returns false
             every { paymentMethodRepository.deleteById(PaymentMethodId(1L)) } returns Unit
 
             // when
@@ -313,6 +317,22 @@ class PaymentMethodServiceTest {
 
             // then
             verify(exactly = 1) { paymentMethodRepository.deleteById(PaymentMethodId(1L)) }
+        }
+
+        @Test
+        fun `이 결제 수단을 사용하는 거래가 있으면 삭제할 수 없다`() {
+            // given
+            every { paymentMethodRepository.findById(PaymentMethodId(1L)) } returns
+                cash(name = "현금", id = 1L)
+            every { transactionRepository.existsByPaymentMethodId(PaymentMethodId(1L)) } returns true
+
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy { paymentMethodService.delete(PaymentMethodId(1L)) }
+                .withMessageContaining("이 결제 수단을 사용하는 거래가 있어 삭제할 수 없습니다")
+
+            verify(exactly = 1) { paymentMethodRepository.findById(PaymentMethodId(1L)) }
+            confirmVerified(paymentMethodRepository)
         }
 
         @Test

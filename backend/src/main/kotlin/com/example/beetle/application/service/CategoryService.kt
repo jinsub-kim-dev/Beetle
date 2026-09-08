@@ -9,6 +9,7 @@ import com.example.beetle.domain.model.Category
 import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.repository.CategoryRepository
+import com.example.beetle.domain.repository.TransactionRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -22,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional(readOnly = true)
 class CategoryService(
     private val categoryRepository: CategoryRepository,
+    private val transactionRepository: TransactionRepository,
 ) : CategoryUseCase {
 
     @Transactional
@@ -65,7 +67,14 @@ class CategoryService(
     @Transactional
     override fun delete(id: CategoryId) {
         // 존재하지 않는 대상 삭제는 404 로 알린다.
-        getById(id)
+        val category = getById(id)
+        // 참조 무결성: 거래가 남아 있으면 삭제를 막는다. DB 외래키로도 이중 보장되지만,
+        // 제약 위반 예외를 그대로 노출하지 않고 원인을 알 수 있는 409 로 알린다.
+        if (transactionRepository.existsByCategoryId(id)) {
+            throw DomainStateException(
+                "이 카테고리를 사용하는 거래가 있어 삭제할 수 없습니다. 카테고리: ${category.name}",
+            )
+        }
         categoryRepository.deleteById(id)
     }
 }

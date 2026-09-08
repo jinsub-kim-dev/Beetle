@@ -8,6 +8,7 @@ import com.example.beetle.domain.exception.ResourceNotFoundException
 import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.repository.PaymentMethodRepository
+import com.example.beetle.domain.repository.TransactionRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional
 @Transactional(readOnly = true)
 class PaymentMethodService(
     private val paymentMethodRepository: PaymentMethodRepository,
+    private val transactionRepository: TransactionRepository,
 ) : PaymentMethodUseCase {
 
     @Transactional
@@ -68,7 +70,13 @@ class PaymentMethodService(
 
     @Transactional
     override fun delete(id: PaymentMethodId) {
-        getById(id)
+        val paymentMethod = getById(id)
+        // 참조 무결성: 거래가 남아 있으면 삭제를 막는다 (CategoryService 와 동일한 정책).
+        if (transactionRepository.existsByPaymentMethodId(id)) {
+            throw DomainStateException(
+                "이 결제 수단을 사용하는 거래가 있어 삭제할 수 없습니다. 결제 수단: ${paymentMethod.name}",
+            )
+        }
         paymentMethodRepository.deleteById(id)
     }
 }

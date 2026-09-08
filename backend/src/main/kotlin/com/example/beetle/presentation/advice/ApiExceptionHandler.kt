@@ -8,7 +8,9 @@ import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.http.converter.HttpMessageNotReadableException
+import org.springframework.web.ErrorResponse as SpringErrorResponse
 import org.springframework.web.bind.MethodArgumentNotValidException
+import org.springframework.web.bind.ServletRequestBindingException
 import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.RestControllerAdvice
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException
@@ -83,8 +85,29 @@ class ApiExceptionHandler {
         )
     }
 
+    /** 필수 쿼리 파라미터/헤더 누락 등 요청 바인딩 실패. */
+    @ExceptionHandler(ServletRequestBindingException::class)
+    fun handleRequestBinding(e: ServletRequestBindingException): ResponseEntity<ErrorResponse> {
+        log.debug("요청 바인딩 실패: {}", e.message)
+        return ResponseEntity.badRequest().body(
+            ErrorResponse(
+                code = "MISSING_PARAMETER",
+                message = e.message ?: "필수 요청 파라미터가 없습니다.",
+            ),
+        )
+    }
+
     @ExceptionHandler(Exception::class)
     fun handleUnexpected(e: Exception): ResponseEntity<ErrorResponse> {
+        // 스프링 MVC 표준 예외는 자체 상태 코드를 갖는다 (405, 415 등).
+        // 이를 500 으로 뭉개지 않고 원래 상태 코드로 응답한다.
+        if (e is SpringErrorResponse) {
+            log.debug("MVC 표준 예외: {} {}", e.statusCode, e.message)
+            return ResponseEntity.status(e.statusCode).body(
+                ErrorResponse(code = "REQUEST_ERROR", message = e.message ?: "요청을 처리할 수 없습니다."),
+            )
+        }
+
         log.error("처리되지 않은 예외", e)
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(
             ErrorResponse(code = "INTERNAL_ERROR", message = "서버 내부 오류가 발생했습니다."),
