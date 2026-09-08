@@ -11,6 +11,8 @@ export interface UiState {
   transactionFormOpen: boolean
   /** 할부 등록 모달 열림 여부. */
   installmentFormOpen: boolean
+  /** 결제 수단 등록 모달 열림 여부. */
+  paymentMethodFormOpen: boolean
   /** 모바일 사이드바 열림 여부. */
   sidebarOpen: boolean
 
@@ -18,6 +20,8 @@ export interface UiState {
   closeTransactionForm: () => void
   openInstallmentForm: () => void
   closeInstallmentForm: () => void
+  openPaymentMethodForm: () => void
+  closePaymentMethodForm: () => void
   toggleSidebar: () => void
   closeSidebar: () => void
 }
@@ -25,12 +29,15 @@ export interface UiState {
 export const useUiStore = create<UiState>((set) => ({
   transactionFormOpen: false,
   installmentFormOpen: false,
+  paymentMethodFormOpen: false,
   sidebarOpen: false,
 
   openTransactionForm: () => set({ transactionFormOpen: true }),
   closeTransactionForm: () => set({ transactionFormOpen: false }),
   openInstallmentForm: () => set({ installmentFormOpen: true }),
   closeInstallmentForm: () => set({ installmentFormOpen: false }),
+  openPaymentMethodForm: () => set({ paymentMethodFormOpen: true }),
+  closePaymentMethodForm: () => set({ paymentMethodFormOpen: false }),
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   closeSidebar: () => set({ sidebarOpen: false }),
 }))

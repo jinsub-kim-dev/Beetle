@@ -1,8 +1,12 @@
+import { Plus } from 'lucide-react'
 import { QueryState } from '@/components/common/QueryState'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useCategories } from '@/features/categories/queries'
+import { PaymentMethodFormDialog } from '@/features/paymentMethods/PaymentMethodFormDialog'
 import { usePaymentMethods } from '@/features/paymentMethods/queries'
 import { categoryTypeLabel, expenseNatureLabel, paymentMethodTypeLabel } from '@/lib/format'
+import { useUiStore } from '@/store/uiStore'
 import type { Category } from '@/types/domain'
 
 /**
@@ -11,6 +15,7 @@ import type { Category } from '@/types/domain'
 export function SettingsPage() {
   const categories = useCategories()
   const paymentMethods = usePaymentMethods()
+  const openPaymentMethodForm = useUiStore((state) => state.openPaymentMethodForm)
 
   const grouped = groupByType(categories.data ?? [])
 
@@ -65,11 +70,17 @@ export function SettingsPage() {
       </Card>
 
       <Card>
-        <CardHeader>
-          <CardTitle>결제 수단</CardTitle>
-          <CardDescription>
-            신용카드는 결제일이 필수입니다. 결제일과 마감일로 청구일이 산출됩니다.
-          </CardDescription>
+        <CardHeader className="flex-row items-start justify-between gap-3">
+          <div className="grid gap-1">
+            <CardTitle>결제 수단</CardTitle>
+            <CardDescription>
+              신용카드는 결제일이 필수입니다. 결제일과 마감일로 청구일이 산출됩니다.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={openPaymentMethodForm}>
+            <Plus />
+            등록
+          </Button>
         </CardHeader>
         <CardContent>
           <QueryState
@@ -96,6 +107,9 @@ export function SettingsPage() {
           </QueryState>
         </CardContent>
       </Card>
+
+      {/* 이 화면에서만 열리므로 레이아웃이 아닌 여기에 마운트한다. */}
+      <PaymentMethodFormDialog />
     </div>
   )
 }

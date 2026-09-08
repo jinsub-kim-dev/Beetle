@@ -6,6 +6,7 @@ describe('uiStore - 화면 상태', () => {
     useUiStore.setState({
       transactionFormOpen: false,
       installmentFormOpen: false,
+      paymentMethodFormOpen: false,
       sidebarOpen: false,
     })
   })
@@ -14,6 +15,7 @@ describe('uiStore - 화면 상태', () => {
     const state = useUiStore.getState()
     expect(state.transactionFormOpen).toBe(false)
     expect(state.installmentFormOpen).toBe(false)
+    expect(state.paymentMethodFormOpen).toBe(false)
     expect(state.sidebarOpen).toBe(false)
   })
 
@@ -33,9 +35,18 @@ describe('uiStore - 화면 상태', () => {
     expect(useUiStore.getState().installmentFormOpen).toBe(false)
   })
 
-  it('두 모달은 서로 독립적이다', () => {
+  it('결제 수단 등록 모달을 열고 닫는다', () => {
+    useUiStore.getState().openPaymentMethodForm()
+    expect(useUiStore.getState().paymentMethodFormOpen).toBe(true)
+
+    useUiStore.getState().closePaymentMethodForm()
+    expect(useUiStore.getState().paymentMethodFormOpen).toBe(false)
+  })
+
+  it('모달들은 서로 독립적이다', () => {
     useUiStore.getState().openTransactionForm()
     expect(useUiStore.getState().installmentFormOpen).toBe(false)
+    expect(useUiStore.getState().paymentMethodFormOpen).toBe(false)
   })
 
   it('사이드바를 토글하고 닫는다', () => {
