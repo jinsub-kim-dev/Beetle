@@ -24,24 +24,23 @@ export function QueryState({
   children,
 }: QueryStateProps) {
   if (isPending) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">불러오는 중…</p>
+    return <p className="text-muted-foreground py-8 text-center text-sm">불러오는 중…</p>
   }
 
   if (error) {
-    const message =
-      error instanceof ApiError ? error.message : '데이터를 불러오지 못했습니다.'
+    const message = error instanceof ApiError ? error.message : '데이터를 불러오지 못했습니다.'
     const code = error instanceof ApiError ? error.code : undefined
 
     return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4">
-        <p className="text-sm font-medium text-destructive">{message}</p>
-        {code && <p className="mt-1 text-xs text-muted-foreground">오류 코드: {code}</p>}
+      <div className="border-destructive/40 bg-destructive/5 rounded-md border p-4">
+        <p className="text-destructive text-sm font-medium">{message}</p>
+        {code && <p className="text-muted-foreground mt-1 text-xs">오류 코드: {code}</p>}
       </div>
     )
   }
 
   if (isEmpty) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+    return <p className="text-muted-foreground py-8 text-center text-sm">{emptyMessage}</p>
   }
 
   return <>{children}</>

@@ -33,7 +33,7 @@ export function SettingsPage() {
             <div className="space-y-4">
               {grouped.map(([type, items]) => (
                 <div key={type}>
-                  <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                  <p className="text-muted-foreground mb-1.5 text-xs font-medium">
                     {categoryTypeLabel(type)}
                   </p>
                   <ul className="flex flex-wrap gap-1.5">
@@ -47,8 +47,8 @@ export function SettingsPage() {
                           <span
                             className={
                               category.fixedExpense
-                                ? 'text-[10px] text-fixed-expense'
-                                : 'text-[10px] text-variable-expense'
+                                ? 'text-fixed-expense text-[10px]'
+                                : 'text-variable-expense text-[10px]'
                             }
                           >
                             {expenseNatureLabel(category.nature)}
@@ -83,7 +83,7 @@ export function SettingsPage() {
                 <li key={method.id} className="flex items-center justify-between py-2.5">
                   <div>
                     <p className="text-sm font-medium">{method.name}</p>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-muted-foreground text-xs">
                       {paymentMethodTypeLabel(method.type)}
                       {method.paymentDay !== undefined && ` · 결제일 ${method.paymentDay}일`}
                       {method.closingDay !== undefined && ` · 마감일 ${method.closingDay}일`}
@@ -105,9 +105,7 @@ function groupByType(categories: Category[]): [Category['type'], Category[]][] {
   const order: Category['type'][] = ['INCOME', 'EXPENSE', 'TRANSFER']
 
   return order
-    .map(
-      (type) => [type, categories.filter((category) => category.type === type)] as const,
-    )
+    .map((type) => [type, categories.filter((category) => category.type === type)] as const)
     .filter(([, items]) => items.length > 0)
     .map(([type, items]) => [type, [...items]])
 }

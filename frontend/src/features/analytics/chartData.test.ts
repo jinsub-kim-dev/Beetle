@@ -83,10 +83,7 @@ describe('chartData - 차트 데이터 변환', () => {
 
     it('기타로 묶어도 점유율 합계가 보존된다', () => {
       const shareBefore = items.reduce((sum, item) => sum + item.sharePercentage, 0)
-      const shareAfter = toShareSlices(items, 3).reduce(
-        (sum, slice) => sum + slice.percentage,
-        0,
-      )
+      const shareAfter = toShareSlices(items, 3).reduce((sum, slice) => sum + slice.percentage, 0)
 
       expect(shareAfter).toBeCloseTo(shareBefore, 6)
     })
@@ -197,10 +194,7 @@ describe('chartData - 차트 데이터 변환', () => {
         },
       ]
 
-      expect(paymentMethodSlices(items).map((slice) => slice.name)).toEqual([
-        '삼성카드',
-        '현금',
-      ])
+      expect(paymentMethodSlices(items).map((slice) => slice.name)).toEqual(['삼성카드', '현금'])
     })
   })
 

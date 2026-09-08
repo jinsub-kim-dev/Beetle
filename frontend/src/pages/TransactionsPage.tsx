@@ -39,7 +39,7 @@ export function TransactionsPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b text-left text-xs text-muted-foreground">
+                  <tr className="text-muted-foreground border-b text-left text-xs">
                     <th className="py-2 pr-3 font-medium">소비일</th>
                     <th className="py-2 pr-3 font-medium">청구일</th>
                     <th className="py-2 pr-3 font-medium">카테고리</th>
@@ -55,13 +55,13 @@ export function TransactionsPage() {
                       <td className="py-2 pr-3 whitespace-nowrap">
                         {formatDate(transaction.spentDate)}
                       </td>
-                      <td className="py-2 pr-3 whitespace-nowrap text-muted-foreground">
+                      <td className="text-muted-foreground py-2 pr-3 whitespace-nowrap">
                         {formatDate(transaction.billDate)}
                       </td>
                       <td className="py-2 pr-3">
                         {categories.get(transaction.categoryId)?.name ?? '-'}
                         {transaction.excludedFromStats && (
-                          <span className="ml-1.5 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                          <span className="bg-secondary text-secondary-foreground ml-1.5 rounded px-1.5 py-0.5 text-[10px]">
                             통계 제외
                           </span>
                         )}
@@ -69,10 +69,10 @@ export function TransactionsPage() {
                       <td className="py-2 pr-3">
                         {paymentMethods.get(transaction.paymentMethodId)?.name ?? '-'}
                       </td>
-                      <td className="max-w-48 truncate py-2 pr-3 text-muted-foreground">
+                      <td className="text-muted-foreground max-w-48 truncate py-2 pr-3">
                         {transaction.memo ?? '-'}
                         {transaction.installment && transaction.installmentSequence && (
-                          <span className="ml-1.5 rounded bg-secondary px-1.5 py-0.5 text-[10px] text-secondary-foreground">
+                          <span className="bg-secondary text-secondary-foreground ml-1.5 rounded px-1.5 py-0.5 text-[10px]">
                             할부 {transaction.installmentSequence}회차
                           </span>
                         )}

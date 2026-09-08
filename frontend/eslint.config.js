@@ -24,4 +24,12 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'error',
     },
   },
+  {
+    // 테스트와 테스트 유틸에는 Fast Refresh 규칙을 적용하지 않는다.
+    // 테스트 파일은 HMR 대상이 아니므로 헬퍼 함수 export 가 문제되지 않는다.
+    files: ['**/*.{test,spec}.{ts,tsx}', 'src/test/**/*.{ts,tsx}'],
+    rules: {
+      'react-refresh/only-export-components': 'off',
+    },
+  },
 )

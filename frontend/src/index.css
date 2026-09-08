@@ -98,8 +98,14 @@
     color: var(--color-foreground);
     /* 한글 가독성을 우선한 시스템 폰트 스택 */
     font-family:
-      'Pretendard Variable', Pretendard, -apple-system, BlinkMacSystemFont, system-ui,
-      'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+      'Pretendard Variable',
+      Pretendard,
+      -apple-system,
+      BlinkMacSystemFont,
+      system-ui,
+      'Apple SD Gothic Neo',
+      'Malgun Gothic',
+      sans-serif;
     -webkit-font-smoothing: antialiased;
   }
 

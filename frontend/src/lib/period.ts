@@ -66,14 +66,11 @@ export function countMonths(from: YearMonthString, to: YearMonthString): number 
   const start = parseYearMonth(from)
   const end = parseYearMonth(to)
 
-  return (end.year * 12 + end.month) - (start.year * 12 + start.month) + 1
+  return end.year * 12 + end.month - (start.year * 12 + start.month) + 1
 }
 
 /** [from] 부터 [to] 까지의 연월 목록을 순서대로 반환한다. */
-export function listYearMonths(
-  from: YearMonthString,
-  to: YearMonthString,
-): YearMonthString[] {
+export function listYearMonths(from: YearMonthString, to: YearMonthString): YearMonthString[] {
   const total = countMonths(from, to)
   if (total < 1) return []
 

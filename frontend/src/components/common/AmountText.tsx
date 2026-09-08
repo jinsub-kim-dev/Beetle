@@ -15,7 +15,12 @@ export interface AmountTextProps {
  *
  * 금액은 자릿수 정렬이 중요하므로 고정폭 숫자(`tabular-nums`)를 적용한다.
  */
-export function AmountText({ amount, signed = false, tone = 'neutral', className }: AmountTextProps) {
+export function AmountText({
+  amount,
+  signed = false,
+  tone = 'neutral',
+  className,
+}: AmountTextProps) {
   const resolvedTone =
     tone === 'auto' ? (amount < 0 ? 'expense' : amount > 0 ? 'income' : 'neutral') : tone
 

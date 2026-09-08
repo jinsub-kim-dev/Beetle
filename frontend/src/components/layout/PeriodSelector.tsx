@@ -62,7 +62,7 @@ export function PeriodSelector() {
         ))}
       </div>
 
-      <p className="text-xs text-muted-foreground">{dateBasisDescription(basis)}</p>
+      <p className="text-muted-foreground text-xs">{dateBasisDescription(basis)}</p>
     </div>
   )
 }

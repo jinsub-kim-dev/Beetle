@@ -81,9 +81,7 @@ export function DashboardPage() {
               tone="expense"
               className="text-xl"
             />
-            <p className="mt-1 text-xs text-muted-foreground">
-              아직 출금되지 않은 금액입니다.
-            </p>
+            <p className="text-muted-foreground mt-1 text-xs">아직 출금되지 않은 금액입니다.</p>
           </CardContent>
         </Card>
       </section>
@@ -159,12 +157,12 @@ export function DashboardPage() {
                       <p className="truncate text-sm font-medium">
                         {categories.get(transaction.categoryId)?.name ?? '분류 없음'}
                         {transaction.memo && (
-                          <span className="ml-2 text-xs text-muted-foreground">
+                          <span className="text-muted-foreground ml-2 text-xs">
                             {transaction.memo}
                           </span>
                         )}
                       </p>
-                      <p className="text-xs text-muted-foreground">
+                      <p className="text-muted-foreground text-xs">
                         소비 {formatMonthDay(transaction.spentDate)} · 청구{' '}
                         {formatMonthDay(transaction.billDate)}
                         {!transaction.settled && ' · 미출금'}

@@ -29,7 +29,12 @@ describe('ApiError - 백엔드 오류 분류', () => {
   })
 
   it('상태 충돌을 판별한다', () => {
-    const error = new ApiError('DOMAIN_STATE_CONFLICT', '이미 결제 완료된 거래입니다.', 409, undefined)
+    const error = new ApiError(
+      'DOMAIN_STATE_CONFLICT',
+      '이미 결제 완료된 거래입니다.',
+      409,
+      undefined,
+    )
 
     expect(error.isConflict).toBe(true)
     expect(error.isValidationError).toBe(false)

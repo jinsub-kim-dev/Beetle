@@ -73,7 +73,7 @@ export function App() {
 function PageBoundary({ children }: { children: React.ReactNode }) {
   return (
     <Suspense
-      fallback={<p className="py-16 text-center text-sm text-muted-foreground">불러오는 중…</p>}
+      fallback={<p className="text-muted-foreground py-16 text-center text-sm">불러오는 중…</p>}
     >
       {children}
     </Suspense>
@@ -84,7 +84,7 @@ function NotFound() {
   return (
     <div className="py-16 text-center">
       <p className="text-lg font-semibold">페이지를 찾을 수 없습니다.</p>
-      <p className="mt-1 text-sm text-muted-foreground">주소를 확인해 주세요.</p>
+      <p className="text-muted-foreground mt-1 text-sm">주소를 확인해 주세요.</p>
     </div>
   )
 }

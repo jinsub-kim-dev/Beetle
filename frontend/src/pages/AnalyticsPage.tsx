@@ -136,9 +136,9 @@ export function AnalyticsPage() {
                 <li key={plan.id} className="flex items-center justify-between py-2.5">
                   <div>
                     <p className="text-sm font-medium">{plan.merchant}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatYearMonth(plan.spentDate.slice(0, 7))} 발생 ·{' '}
-                      {plan.installmentMonths}개월 · 월 {formatKrw(plan.monthlyAmount)}
+                    <p className="text-muted-foreground text-xs">
+                      {formatYearMonth(plan.spentDate.slice(0, 7))} 발생 · {plan.installmentMonths}
+                      개월 · 월 {formatKrw(plan.monthlyAmount)}
                     </p>
                   </div>
                   <AmountText amount={plan.totalAmount} className="text-sm" />

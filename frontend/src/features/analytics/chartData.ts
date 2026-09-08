@@ -87,10 +87,7 @@ export function categorySlices(items: CategoryBreakdownItem[], topN = 5): ShareS
 }
 
 /** 결제 수단 집계를 도넛 조각으로 변환한다. */
-export function paymentMethodSlices(
-  items: PaymentMethodBreakdownItem[],
-  topN = 5,
-): ShareSlice[] {
+export function paymentMethodSlices(items: PaymentMethodBreakdownItem[], topN = 5): ShareSlice[] {
   return toShareSlices(
     items.map((item) => ({
       name: item.paymentMethodName,
