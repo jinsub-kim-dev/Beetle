@@ -14,7 +14,8 @@ com.example.beetle
  │   ┣ model/              # 애그리거트 루트, 엔티티, 값 객체(VO)
  │   ┣ service/            # 도메인 서비스 (여러 애그리거트에 걸친 순수 규칙)
  │   ┣ exception/          # 도메인 예외
- │   ┗ repository/         # 리포지토리 인터페이스 = 아웃바운드 포트 (DIP)
+ │   ┣ repository/         # 리포지토리 인터페이스 = 아웃바운드 포트 (DIP)
+ │   ┗ query/              # 통계 집계 전용 조회 포트 (Read Model)
  │
  ┣ application/            # 유스케이스 및 애플리케이션 서비스
  │   ┣ port/               # 인바운드 포트(유스케이스 인터페이스) 전용
@@ -64,8 +65,10 @@ com.example.beetle
 - 하나의 유스케이스에서는 **하나의 애그리거트만 변경**하는 것을 기본으로 합니다. 둘 이상을 변경해야
   하면 그 이유를 코드 주석에 남깁니다.
 - 리포지토리는 **애그리거트 루트 단위로만** 정의합니다. 테이블 단위로 만들지 않습니다.
-- 통계/집계 조회는 애그리거트 재구성이 불필요하므로, 리포지토리가 아닌 **전용 조회 어댑터(Read Model)**
-  로 분리합니다.
+- 통계/집계 조회는 애그리거트 재구성이 불필요하므로, 리포지토리가 아닌 **전용 조회 포트(Read Model)**
+  로 분리합니다. 포트는 `domain/query` 에 두고 구현은 `infrastructure/persistence/query` 에 둡니다.
+  집계는 DB 에서 수행합니다. 애그리거트를 모두 읽어 메모리에서 합산하면 데이터가 늘어날수록
+  감당할 수 없습니다.
 
 ### 4.2 엔티티와 값 객체의 구분 (`data class` 사용 규칙)
 | 분류 | 클래스 형태 | 동일성 판단 기준 |
@@ -93,6 +96,9 @@ com.example.beetle
   (`tx.amount = x` 금지 → `tx.correctAmount(x)`, `tx.settle()`)
 - 검증 실패는 `IllegalArgumentException`이 아니라 `domain/exception`의 **도메인 예외**로 던집니다.
   코틀린 표준 `require` 대신 `checkInvariant { }` 헬퍼를 사용해 예외 계층을 유지합니다.
+- **도달할 수 없는 방어 코드를 두지 않습니다.** 다른 불변식이나 `private` 생성자가 이미 보장하는
+  조건을 다시 검사하면, 그 분기는 테스트로 커버할 수 없어 커버리지 게이트에서 실패합니다.
+  그런 경우 검사를 제거하고 "무엇이 이 조건을 보장하는지" 를 주석으로 남깁니다.
 
 **도메인에서 반드시 보장해야 할 불변식:**
 - `Category`: `nature`(FIXED/VARIABLE)는 `type == EXPENSE`일 때만 non-null

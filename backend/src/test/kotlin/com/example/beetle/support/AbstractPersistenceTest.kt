@@ -1,5 +1,6 @@
 package com.example.beetle.support
 
+import com.example.beetle.domain.query.StatisticsQuery
 import com.example.beetle.domain.repository.CategoryRepository
 import com.example.beetle.domain.repository.InstallmentPlanRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
@@ -8,6 +9,7 @@ import com.example.beetle.infrastructure.persistence.adapter.CategoryRepositoryA
 import com.example.beetle.infrastructure.persistence.adapter.InstallmentPlanRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.PaymentMethodRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.TransactionRepositoryAdapter
+import com.example.beetle.infrastructure.persistence.query.StatisticsQueryAdapter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest
@@ -39,6 +41,7 @@ import org.springframework.context.annotation.Import
     PaymentMethodRepositoryAdapter::class,
     TransactionRepositoryAdapter::class,
     InstallmentPlanRepositoryAdapter::class,
+    StatisticsQueryAdapter::class,
 )
 abstract class AbstractPersistenceTest {
 
@@ -53,6 +56,9 @@ abstract class AbstractPersistenceTest {
 
     @field:Autowired
     protected lateinit var installmentPlanRepository: InstallmentPlanRepository
+
+    @field:Autowired
+    protected lateinit var statisticsQuery: StatisticsQuery
 
     @field:Autowired
     protected lateinit var testEntityManager: TestEntityManager
