@@ -27,9 +27,9 @@ spring:
     baseline-on-migrate: true
 
   jackson:
+    # Jackson 3 은 날짜/시간을 기본적으로 ISO-8601 문자열로 직렬화한다.
+    # (WRITE_DATES_AS_TIMESTAMPS 는 SerializationFeature 에서 제거되었다)
     default-property-inclusion: non_null
-    serialization:
-      write-dates-as-timestamps: false
 
 server:
   port: 8080

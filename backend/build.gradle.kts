@@ -59,8 +59,36 @@ allOpen {
 	annotation("jakarta.persistence.Embeddable")
 }
 
+/**
+ * Testcontainers 는 기본적으로 /var/run/docker.sock 을 탐색한다.
+ * Rancher Desktop, Colima 등 대체 런타임을 쓰는 개발 환경에서도 별도 설정 없이
+ * 통합 테스트가 동작하도록, 실제 소켓 위치를 자동으로 탐지해 주입한다.
+ *
+ * TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE 는 Ryuk 컨테이너가 VM 내부에서 마운트할
+ * 경로이므로 호스트 경로와 달리 항상 /var/run/docker.sock 이다.
+ */
+fun Test.configureDockerSocket() {
+	if (System.getenv("DOCKER_HOST") != null) return
+
+	val home = System.getProperty("user.home")
+	val defaultSocket = "/var/run/docker.sock"
+	val candidates = listOf(
+		defaultSocket,
+		"$home/.rd/docker.sock",
+		"$home/.colima/default/docker.sock",
+		"$home/.docker/run/docker.sock",
+	)
+
+	val socket = candidates.firstOrNull { File(it).exists() } ?: return
+	if (socket == defaultSocket) return
+
+	environment("DOCKER_HOST", "unix://$socket")
+	environment("TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE", defaultSocket)
+}
+
 tasks.withType<Test> {
 	useJUnitPlatform()
+	configureDockerSocket()
 	finalizedBy(tasks.jacocoTestReport)
 }
 

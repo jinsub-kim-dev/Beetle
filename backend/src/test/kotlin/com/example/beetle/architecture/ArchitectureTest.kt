@@ -5,6 +5,7 @@ import com.tngtech.archunit.junit.AnalyzeClasses
 import com.tngtech.archunit.junit.ArchTest
 import com.tngtech.archunit.lang.ArchRule
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.classes
+import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.fields
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import com.tngtech.archunit.library.Architectures.layeredArchitecture
 
@@ -103,6 +104,16 @@ class ArchitectureTest {
             .that().resideInAPackage("$DOMAIN.repository..")
             .should().beInterfaces()
             .because("아웃바운드 포트는 인터페이스로 정의하고 인프라에서 구현한다 (CLAUDE.md 2)")
+            .allowEmptyShould(true)
+
+    // --- 규칙 5: 도메인 모델의 불변성 ---
+
+    @field:ArchTest
+    val 도메인_모델의_필드는_모두_불변이다: ArchRule =
+        fields()
+            .that().areDeclaredInClassesThat().resideInAPackage("$DOMAIN.model..")
+            .should().beFinal()
+            .because("도메인 모델은 val 을 사용해 불변으로 유지한다 (CLAUDE.md 3.3)")
             .allowEmptyShould(true)
 
     companion object {
