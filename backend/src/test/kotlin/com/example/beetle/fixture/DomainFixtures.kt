@@ -7,7 +7,12 @@ import com.example.beetle.domain.model.DayOfMonthValue
 import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
+import com.example.beetle.domain.model.InstallmentPlanId
+import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.PaymentMethodType
+import com.example.beetle.domain.model.Transaction
+import com.example.beetle.domain.model.TransactionId
+import java.time.LocalDate
 
 /**
  * 도메인 테스트 픽스처.
@@ -76,4 +81,58 @@ private fun immediatePaymentMethod(
     PaymentMethod.create(name, type)
 } else {
     PaymentMethod.reconstitute(PaymentMethodId(id), name, type, null, null)
+}
+
+// --- Transaction ---
+
+/** 기본 소비일. 테스트에서 날짜를 명시하지 않을 때 사용한다. */
+val 기본소비일: LocalDate = LocalDate.of(2026, 1, 10)
+
+/** 기본 청구일. 결제일 14일 신용카드로 [기본소비일] 에 소비한 경우의 청구일. */
+val 기본청구일: LocalDate = LocalDate.of(2026, 2, 14)
+
+fun transaction(
+    categoryId: Long = 1L,
+    paymentMethodId: Long = 1L,
+    amount: Long = 10_000L,
+    spentDate: LocalDate = 기본소비일,
+    billDate: LocalDate = 기본청구일,
+    memo: String? = null,
+    isSettled: Boolean = false,
+    isExcludedFromStats: Boolean = false,
+    id: Long? = null,
+): Transaction {
+    val created = Transaction.create(
+        categoryId = CategoryId(categoryId),
+        paymentMethodId = PaymentMethodId(paymentMethodId),
+        amount = Money.of(amount),
+        spentDate = spentDate,
+        billDate = billDate,
+        memo = memo,
+        isSettled = isSettled,
+        isExcludedFromStats = isExcludedFromStats,
+    )
+    return id?.let { created.assignId(TransactionId(it)) } ?: created
+}
+
+fun installmentTransaction(
+    sequence: Int,
+    planId: Long = 1L,
+    categoryId: Long = 1L,
+    paymentMethodId: Long = 1L,
+    amount: Long = 100_000L,
+    spentDate: LocalDate = 기본소비일,
+    billDate: LocalDate = 기본청구일,
+    id: Long? = null,
+): Transaction {
+    val created = Transaction.createInstallmentPart(
+        categoryId = CategoryId(categoryId),
+        paymentMethodId = PaymentMethodId(paymentMethodId),
+        amount = Money.of(amount),
+        spentDate = spentDate,
+        billDate = billDate,
+        installmentPlanId = InstallmentPlanId(planId),
+        installmentSequence = sequence,
+    )
+    return id?.let { created.assignId(TransactionId(it)) } ?: created
 }

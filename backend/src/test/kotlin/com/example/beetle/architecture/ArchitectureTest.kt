@@ -102,6 +102,9 @@ class ArchitectureTest {
     val 도메인_리포지토리는_인터페이스로만_정의한다: ArchRule =
         classes()
             .that().resideInAPackage("$DOMAIN.repository..")
+            // 인터페이스의 기본 파라미터/기본 구현에 대해 코틀린 컴파일러가 만드는
+            // DefaultImpls 중첩 클래스는 검사 대상이 아니다.
+            .and().areTopLevelClasses()
             .should().beInterfaces()
             .because("아웃바운드 포트는 인터페이스로 정의하고 인프라에서 구현한다 (CLAUDE.md 2)")
             .allowEmptyShould(true)
