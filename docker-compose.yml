@@ -1,0 +1,45 @@
+services:
+  mysql:
+    image: mysql:8.4
+    container_name: beetle-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rootpassword}
+      MYSQL_DATABASE: ${DB_NAME:-beetle}
+      MYSQL_USER: ${DB_USER:-beetle}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-beetlepassword}
+      TZ: Asia/Seoul
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-time-zone=+09:00
+    ports:
+      - "${DB_PORT:-3306}:3306"
+    volumes:
+      # Docker Volume 으로 데이터 영속성 확보 (컨테이너 재생성에도 데이터 유지)
+      - beetle-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-rootpassword}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+    container_name: beetle-backend
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:-beetle}
+      DB_USER: ${DB_USER:-beetle}
+      DB_PASSWORD: ${DB_PASSWORD:-beetlepassword}
+      TZ: Asia/Seoul
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+volumes:
+  beetle-mysql-data:
