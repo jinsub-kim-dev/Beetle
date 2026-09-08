@@ -70,6 +70,8 @@ class TransactionRepositoryAdapter(
 
     override fun deleteById(id: TransactionId) = jpaRepository.deleteById(id.value)
 
-    override fun deleteAllByInstallmentPlanId(planId: InstallmentPlanId) =
-        jpaRepository.deleteAllByInstallmentPlanId(planId.value)
+    override fun deleteAll(transactions: List<Transaction>) {
+        // 영속화되지 않은 애그리거트는 삭제 대상이 될 수 없으므로 걸러낸다.
+        jpaRepository.deleteAllById(transactions.mapNotNull { it.id?.value })
+    }
 }

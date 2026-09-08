@@ -10,6 +10,7 @@ import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.repository.CategoryRepository
+import com.example.beetle.domain.repository.InstallmentPlanRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.fixture.expenseCategory
 import com.example.beetle.fixture.incomeCategory
@@ -29,7 +30,9 @@ class CategoryServiceTest {
 
     private val categoryRepository = mockk<CategoryRepository>()
     private val transactionRepository = mockk<TransactionRepository>()
-    private val categoryService = CategoryService(categoryRepository, transactionRepository)
+    private val installmentPlanRepository = mockk<InstallmentPlanRepository>()
+    private val categoryService =
+        CategoryService(categoryRepository, transactionRepository, installmentPlanRepository)
 
     @Nested
     @DisplayName("등록")
@@ -295,6 +298,7 @@ class CategoryServiceTest {
             // given
             every { categoryRepository.findById(CategoryId(1L)) } returns expenseCategory(id = 1L)
             every { transactionRepository.existsByCategoryId(CategoryId(1L)) } returns false
+            every { installmentPlanRepository.existsByCategoryId(CategoryId(1L)) } returns false
             every { categoryRepository.deleteById(CategoryId(1L)) } returns Unit
 
             // when
@@ -319,6 +323,23 @@ class CategoryServiceTest {
             verify(exactly = 1) { categoryRepository.findById(CategoryId(1L)) }
             verify(exactly = 1) { transactionRepository.existsByCategoryId(CategoryId(1L)) }
             confirmVerified(categoryRepository, transactionRepository)
+        }
+
+        @Test
+        fun `이 카테고리를 사용하는 할부 계획이 있으면 삭제할 수 없다`() {
+            // given: 거래는 없지만 할부 계획이 참조하는 경우
+            every { categoryRepository.findById(CategoryId(1L)) } returns
+                expenseCategory(name = "가전", id = 1L)
+            every { transactionRepository.existsByCategoryId(CategoryId(1L)) } returns false
+            every { installmentPlanRepository.existsByCategoryId(CategoryId(1L)) } returns true
+
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy { categoryService.delete(CategoryId(1L)) }
+                .withMessageContaining("할부 계획이 있어 삭제할 수 없습니다")
+
+            verify(exactly = 1) { categoryRepository.findById(CategoryId(1L)) }
+            confirmVerified(categoryRepository)
         }
 
         @Test

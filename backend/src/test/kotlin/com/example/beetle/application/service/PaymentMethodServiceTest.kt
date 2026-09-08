@@ -9,6 +9,7 @@ import com.example.beetle.domain.model.DayOfMonthValue
 import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.PaymentMethodType
+import com.example.beetle.domain.repository.InstallmentPlanRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.fixture.cash
@@ -29,8 +30,10 @@ class PaymentMethodServiceTest {
 
     private val paymentMethodRepository = mockk<PaymentMethodRepository>()
     private val transactionRepository = mockk<TransactionRepository>()
-    private val paymentMethodService =
-        PaymentMethodService(paymentMethodRepository, transactionRepository)
+    private val installmentPlanRepository = mockk<InstallmentPlanRepository>()
+    private val paymentMethodService = PaymentMethodService(
+        paymentMethodRepository, transactionRepository, installmentPlanRepository,
+    )
 
     @Nested
     @DisplayName("등록")
@@ -310,6 +313,9 @@ class PaymentMethodServiceTest {
             // given
             every { paymentMethodRepository.findById(PaymentMethodId(1L)) } returns cash(id = 1L)
             every { transactionRepository.existsByPaymentMethodId(PaymentMethodId(1L)) } returns false
+            every {
+                installmentPlanRepository.existsByPaymentMethodId(PaymentMethodId(1L))
+            } returns false
             every { paymentMethodRepository.deleteById(PaymentMethodId(1L)) } returns Unit
 
             // when
@@ -330,6 +336,25 @@ class PaymentMethodServiceTest {
             assertThatExceptionOfType(DomainStateException::class.java)
                 .isThrownBy { paymentMethodService.delete(PaymentMethodId(1L)) }
                 .withMessageContaining("이 결제 수단을 사용하는 거래가 있어 삭제할 수 없습니다")
+
+            verify(exactly = 1) { paymentMethodRepository.findById(PaymentMethodId(1L)) }
+            confirmVerified(paymentMethodRepository)
+        }
+
+        @Test
+        fun `이 결제 수단을 사용하는 할부 계획이 있으면 삭제할 수 없다`() {
+            // given
+            every { paymentMethodRepository.findById(PaymentMethodId(1L)) } returns
+                creditCard(name = "삼성카드", paymentDay = 14, id = 1L)
+            every { transactionRepository.existsByPaymentMethodId(PaymentMethodId(1L)) } returns false
+            every {
+                installmentPlanRepository.existsByPaymentMethodId(PaymentMethodId(1L))
+            } returns true
+
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy { paymentMethodService.delete(PaymentMethodId(1L)) }
+                .withMessageContaining("할부 계획이 있어 삭제할 수 없습니다")
 
             verify(exactly = 1) { paymentMethodRepository.findById(PaymentMethodId(1L)) }
             confirmVerified(paymentMethodRepository)

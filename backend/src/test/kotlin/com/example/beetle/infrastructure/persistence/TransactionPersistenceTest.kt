@@ -6,6 +6,7 @@ import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.DayOfMonthValue
 import com.example.beetle.domain.model.ExpenseNature
+import com.example.beetle.domain.model.InstallmentPlan
 import com.example.beetle.domain.model.InstallmentPlanId
 import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.PaymentMethod
@@ -60,6 +61,21 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
         flushAndClear()
     }
 
+    /** 실제 할부 계획을 저장하고 식별자를 반환한다. transaction 의 외래키 제약을 만족시킨다. */
+    private fun 할부계획(months: Int = 12, totalAmount: Long = 1_200_000L): InstallmentPlanId =
+        requireNotNull(
+            installmentPlanRepository.save(
+                InstallmentPlan.create(
+                    categoryId = 식비,
+                    paymentMethodId = 삼성카드,
+                    totalAmount = Money.of(totalAmount),
+                    installmentMonths = months,
+                    merchant = "테스트 사용처",
+                    spentDate = LocalDate.of(2026, 1, 10),
+                ),
+            ).id,
+        )
+
     private fun 거래(
         categoryId: CategoryId = 식비,
         paymentMethodId: PaymentMethodId = 삼성카드,
@@ -106,13 +122,14 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
     @Test
     fun `할부 회차 거래는 계획 식별자와 회차 번호가 함께 복원된다`() {
         // given
+        val planId = 할부계획()
         val installment = Transaction.createInstallmentPart(
             categoryId = 식비,
             paymentMethodId = 삼성카드,
             amount = Money.of(83_333),
             spentDate = LocalDate.of(2026, 1, 10),
             billDate = LocalDate.of(2026, 2, 14),
-            installmentPlanId = InstallmentPlanId(7L),
+            installmentPlanId = planId,
             installmentSequence = 3,
             memo = "냉장고",
         )
@@ -124,13 +141,14 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
 
         // then
         assertThat(found!!.isInstallment).isTrue()
-        assertThat(found.installmentPlanId).isEqualTo(InstallmentPlanId(7L))
+        assertThat(found.installmentPlanId).isEqualTo(planId)
         assertThat(found.installmentSequence).isEqualTo(3)
     }
 
     @Test
     fun `여러 거래를 한 번에 저장한다`() {
         // given
+        val planId = 할부계획()
         val transactions = (1..12).map { sequence ->
             Transaction.createInstallmentPart(
                 categoryId = 식비,
@@ -138,7 +156,7 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
                 amount = Money.of(83_333),
                 spentDate = LocalDate.of(2026, 1, 10),
                 billDate = LocalDate.of(2026, 2, 14).plusMonths((sequence - 1).toLong()),
-                installmentPlanId = InstallmentPlanId(1L),
+                installmentPlanId = planId,
                 installmentSequence = sequence,
             )
         }
@@ -150,7 +168,7 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
         // then
         assertThat(saved).hasSize(12)
         assertThat(saved.map { it.id }).doesNotContainNull()
-        assertThat(transactionRepository.findAllByInstallmentPlanId(InstallmentPlanId(1L)))
+        assertThat(transactionRepository.findAllByInstallmentPlanId(planId))
             .hasSize(12)
             .extracting<Int> { it.installmentSequence }
             .containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12)
@@ -335,8 +353,9 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
     }
 
     @Test
-    fun `할부 계획 단위로 일괄 삭제한다`() {
+    fun `지정한 거래 목록만 일괄 삭제한다`() {
         // given
+        val planId = 할부계획(months = 3, totalAmount = 300_000L)
         transactionRepository.saveAll(
             (1..3).map { sequence ->
                 Transaction.createInstallmentPart(
@@ -345,7 +364,7 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
                     amount = Money.of(100_000),
                     spentDate = LocalDate.of(2026, 1, 10),
                     billDate = LocalDate.of(2026, 2, 14),
-                    installmentPlanId = InstallmentPlanId(9L),
+                    installmentPlanId = planId,
                     installmentSequence = sequence,
                 )
             },
@@ -353,12 +372,13 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
         transactionRepository.save(거래())
         flushAndClear()
 
-        // when
-        transactionRepository.deleteAllByInstallmentPlanId(InstallmentPlanId(9L))
+        // when: 할부 회차만 골라 삭제한다
+        val parts = transactionRepository.findAllByInstallmentPlanId(planId)
+        transactionRepository.deleteAll(parts)
         flushAndClear()
 
         // then: 할부 회차만 지워지고 일반 거래는 남는다
-        assertThat(transactionRepository.findAllByInstallmentPlanId(InstallmentPlanId(9L))).isEmpty()
+        assertThat(transactionRepository.findAllByInstallmentPlanId(planId)).isEmpty()
         assertThat(
             transactionRepository.findAllByPeriod(
                 DateBasis.SPENT, LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31),

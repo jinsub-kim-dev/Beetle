@@ -53,6 +53,4 @@ interface TransactionJpaRepository : JpaRepository<TransactionJpaEntity, Long> {
     fun existsByCategoryId(categoryId: Long): Boolean
 
     fun existsByPaymentMethodId(paymentMethodId: Long): Boolean
-
-    fun deleteAllByInstallmentPlanId(installmentPlanId: Long)
 }

@@ -42,5 +42,11 @@ interface TransactionRepository {
 
     fun deleteById(id: TransactionId)
 
-    fun deleteAllByInstallmentPlanId(planId: InstallmentPlanId)
+    /**
+     * 지정한 거래들을 삭제한다.
+     *
+     * 할부 중도 해지 시 미정산 회차만 골라 삭제하는 용도다. 애그리거트 목록을 그대로
+     * 받으므로 호출부가 식별자를 다시 꺼낼 필요가 없다.
+     */
+    fun deleteAll(transactions: List<Transaction>)
 }

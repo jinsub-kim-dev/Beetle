@@ -1,6 +1,7 @@
 package com.example.beetle.config
 
 import com.example.beetle.domain.service.BillDateCalculator
+import com.example.beetle.domain.service.InstallmentScheduler
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -15,4 +16,8 @@ class DomainServiceConfiguration {
 
     @Bean
     fun billDateCalculator(): BillDateCalculator = BillDateCalculator()
+
+    @Bean
+    fun installmentScheduler(billDateCalculator: BillDateCalculator): InstallmentScheduler =
+        InstallmentScheduler(billDateCalculator)
 }

@@ -9,6 +9,7 @@ import com.example.beetle.domain.model.Category
 import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.repository.CategoryRepository
+import com.example.beetle.domain.repository.InstallmentPlanRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -24,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional
 class CategoryService(
     private val categoryRepository: CategoryRepository,
     private val transactionRepository: TransactionRepository,
+    private val installmentPlanRepository: InstallmentPlanRepository,
 ) : CategoryUseCase {
 
     @Transactional
@@ -73,6 +75,11 @@ class CategoryService(
         if (transactionRepository.existsByCategoryId(id)) {
             throw DomainStateException(
                 "이 카테고리를 사용하는 거래가 있어 삭제할 수 없습니다. 카테고리: ${category.name}",
+            )
+        }
+        if (installmentPlanRepository.existsByCategoryId(id)) {
+            throw DomainStateException(
+                "이 카테고리를 사용하는 할부 계획이 있어 삭제할 수 없습니다. 카테고리: ${category.name}",
             )
         }
         categoryRepository.deleteById(id)
