@@ -23,7 +23,9 @@ spring:
 
   flyway:
     enabled: true
-    locations: classpath:db/migration
+    # 스키마(db/migration)와 시드 데이터(db/seed)를 분리한다.
+    # 테스트는 빈 DB 를 전제하므로 db/migration 만 적용한다.
+    locations: classpath:db/migration,classpath:db/seed
     baseline-on-migrate: true
 
   jackson:

@@ -30,7 +30,9 @@ import org.springframework.context.annotation.Import
  * `-Xannotation-default-target=param-property` 때문에 타깃을 생략하면 어노테이션이
  * 코틀린 프로퍼티에만 붙어 스프링이 인식하지 못한다.
  */
-@DataJpaTest
+// 영속성 테스트는 빈 DB 를 전제로 검증하므로 시드 데이터(db/seed)를 적용하지 않는다.
+// 시드 SQL 자체의 정합성은 BeetleApplicationTests 가 전체 컨텍스트를 띄우며 검증한다.
+@DataJpaTest(properties = ["spring.flyway.locations=classpath:db/migration"])
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 // @DataJpaTest 슬라이스는 Flyway 자동 구성을 포함하지 않는다. 명시적으로 넣어야
 // 마이그레이션이 적용되고 ddl-auto=validate 검증이 의미를 갖는다.
