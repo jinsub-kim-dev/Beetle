@@ -27,7 +27,9 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")
 	implementation("tools.jackson.module:jackson-module-kotlin")
-	implementation("org.flywaydb:flyway-core")
+	// Boot 4 는 자동 구성이 모듈별로 분리되어 있다. flyway-core 만으로는
+	// FlywayAutoConfiguration 이 없어 마이그레이션이 실행되지 않는다.
+	implementation("org.springframework.boot:spring-boot-starter-flyway")
 	runtimeOnly("org.flywaydb:flyway-mysql")
 	runtimeOnly("com.mysql:mysql-connector-j")
 
@@ -121,4 +123,8 @@ tasks.jacocoTestCoverageVerification {
 
 tasks.check {
 	dependsOn(tasks.jacocoTestCoverageVerification)
+}
+
+tasks.register("printTestCp") {
+	doLast { println(sourceSets["test"].runtimeClasspath.asPath) }
 }

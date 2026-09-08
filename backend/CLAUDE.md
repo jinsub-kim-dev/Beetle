@@ -70,7 +70,8 @@ com.example.beetle
 ### 4.2 엔티티와 값 객체의 구분 (`data class` 사용 규칙)
 | 분류 | 클래스 형태 | 동일성 판단 기준 |
 |---|---|---|
-| 값 객체(VO) — `Money`, `BillingCycle` 등 | `data class` (불변) | 전체 필드 값 |
+| 값 객체(VO) — `Money` 등 다중 필드 | `data class` (불변) | 전체 필드 값 |
+| 값 객체(VO) — `CategoryId`, `DayOfMonthValue` 등 단일 값 | `@JvmInline value class` | 래핑한 값 |
 | 엔티티 / 애그리거트 루트 | 일반 `class` | **식별자(ID)** — `equals`/`hashCode` 직접 구현 |
 | 요청·응답 DTO (`presentation`) | `data class` | — |
 | JPA 엔티티 (`infrastructure`) | 일반 `class` | 식별자(ID) |
@@ -80,6 +81,10 @@ com.example.beetle
 2. `copy()`가 모든 필드의 외부 임의 교체를 허용하여 불변식 검증을 우회합니다.
    (예: `tx.copy(billDate = spentDate보다 이전 날짜)`)
 
+애그리거트 루트는 `domain/model/AggregateRoot.kt` 의 마커 인터페이스를 구현합니다. 이 인터페이스를
+구현하면 `DomainModelConventionTest` 가 위 규약(`data class` 금지, `copy()` 미노출, `equals`/`hashCode`
+직접 구현)을 자동으로 검사하므로, 애그리거트를 추가할 때 테스트를 수정할 필요가 없습니다.
+
 ### 4.3 불변식(Invariant)은 도메인이 보호한다
 - 모든 불변식은 **생성 시점(`init` 블록 또는 `companion object` 팩토리 메서드)에서 검증**하여,
   유효하지 않은 상태의 객체가 애초에 존재할 수 없게 만듭니다.
@@ -87,6 +92,7 @@ com.example.beetle
 - 상태 변경은 setter가 아니라 **의도를 드러내는 메서드**로만 합니다.
   (`tx.amount = x` 금지 → `tx.correctAmount(x)`, `tx.settle()`)
 - 검증 실패는 `IllegalArgumentException`이 아니라 `domain/exception`의 **도메인 예외**로 던집니다.
+  코틀린 표준 `require` 대신 `checkInvariant { }` 헬퍼를 사용해 예외 계층을 유지합니다.
 
 **도메인에서 반드시 보장해야 할 불변식:**
 - `Category`: `nature`(FIXED/VARIABLE)는 `type == EXPENSE`일 때만 non-null
@@ -154,6 +160,9 @@ com.example.beetle
 - 경계값이 여러 개인 계산 로직은 `@ParameterizedTest`로 표 형태로 검증합니다.
 - 테스트 픽스처는 `src/test/kotlin/com/example/beetle/fixture`에 팩토리 함수로 모아 재사용합니다.
 - 테스트 하나는 하나의 규칙만 검증합니다. 단정(assertion)을 여러 규칙에 걸쳐 뭉치지 않습니다.
+- **MockK 의 `any()` 를 값 객체(`@JvmInline value class`) 파라미터에 사용하지 않습니다.** MockK 는
+  매처 서명을 만들 때 값 객체를 난수로 생성하는데, 이 값이 불변식(예: ID 는 양수)을 위반하면
+  테스트가 간헐적으로 실패합니다. 구체적인 값을 넘기거나 `confirmVerified` 로 검증합니다.
 
 ---
 
