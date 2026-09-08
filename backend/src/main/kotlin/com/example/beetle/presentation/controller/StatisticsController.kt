@@ -43,7 +43,7 @@ class StatisticsController(
         @RequestParam(defaultValue = "SPENT") basis: DateBasis,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
-        @RequestParam(required = false) type: CategoryType?,
+        @RequestParam(defaultValue = "EXPENSE") type: CategoryType,
     ): CategoryBreakdownResponse = CategoryBreakdownResponse.from(
         statisticsUseCase.categoryBreakdown(basis, from, to, type),
     )

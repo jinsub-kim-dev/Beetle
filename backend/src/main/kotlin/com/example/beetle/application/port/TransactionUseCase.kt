@@ -37,6 +37,10 @@ interface TransactionUseCase {
  *
  * @param billDate 청구일. `null` 이면 결제 수단의 결제 조건으로부터 자동 산출한다.
  *   수동 지정은 카드사 사정으로 청구일이 예외적으로 달라진 경우에만 사용한다.
+ * @param isSettled 출금 완료 여부. `null` 이면 결제 수단으로부터 도출한다.
+ *   즉시 결제 수단(현금·체크카드·계좌)은 소비 시점에 이미 출금이 끝났으므로 `true`,
+ *   신용카드는 청구일에 출금되므로 `false` 다. 미래 날짜의 계좌 자동이체처럼
+ *   예외가 필요하면 명시적으로 지정한다.
  */
 data class RegisterTransactionCommand(
     val categoryId: CategoryId,
@@ -45,7 +49,7 @@ data class RegisterTransactionCommand(
     val spentDate: LocalDate,
     val memo: String? = null,
     val billDate: LocalDate? = null,
-    val isSettled: Boolean = false,
+    val isSettled: Boolean? = null,
     val isExcludedFromStats: Boolean = false,
 )
 

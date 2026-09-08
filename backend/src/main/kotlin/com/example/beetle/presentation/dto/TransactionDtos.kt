@@ -36,7 +36,11 @@ data class RegisterTransactionRequest(
 
     val billDate: LocalDate? = null,
 
-    val settled: Boolean = false,
+    /**
+     * 출금 완료 여부. 생략하면 결제 수단으로부터 도출된다.
+     * 즉시 결제 수단(현금·체크카드·계좌)은 `true`, 신용카드는 `false` 가 된다.
+     */
+    val settled: Boolean? = null,
 
     val excludedFromStats: Boolean = false,
 ) {

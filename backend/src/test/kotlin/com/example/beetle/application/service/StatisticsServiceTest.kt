@@ -23,6 +23,8 @@ import org.assertj.core.api.Assertions.assertThatNoException
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -129,7 +131,9 @@ class StatisticsServiceTest {
         fun `합계와 항목별 점유율을 계산한다`() {
             // given
             every {
-                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월시작, 일월종료, null)
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT, 일월시작, 일월종료, CategoryType.EXPENSE,
+                )
             } returns listOf(
                 aggregate(1L, "월세", 700_000L),
                 aggregate(2L, "식비", 250_000L),
@@ -149,7 +153,9 @@ class StatisticsServiceTest {
         fun `집계 결과가 없으면 합계는 0원이고 항목도 비어 있다`() {
             // given
             every {
-                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월시작, 일월종료, null)
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT, 일월시작, 일월종료, CategoryType.EXPENSE,
+                )
             } returns emptyList()
 
             // when
@@ -161,8 +167,8 @@ class StatisticsServiceTest {
         }
 
         @Test
-        fun `타입 필터가 조회 포트로 전달된다`() {
-            // given
+        fun `타입을 지정하지 않으면 지출을 집계한다`() {
+            // given: 수입·지출·이체를 한 분모로 섞으면 점유율이 의미를 잃는다
             every {
                 statisticsQuery.aggregateByCategory(
                     DateBasis.SPENT, 일월시작, 일월종료, CategoryType.EXPENSE,
@@ -170,15 +176,33 @@ class StatisticsServiceTest {
             } returns listOf(aggregate(1L, "식비", 100_000L))
 
             // when
-            statisticsService.categoryBreakdown(
-                DateBasis.SPENT, 일월시작, 일월종료, CategoryType.EXPENSE,
-            )
+            val breakdown = statisticsService.categoryBreakdown(DateBasis.SPENT, 일월시작, 일월종료)
 
             // then
+            assertThat(breakdown.type).isEqualTo(CategoryType.EXPENSE)
             verify {
                 statisticsQuery.aggregateByCategory(
                     DateBasis.SPENT, 일월시작, 일월종료, CategoryType.EXPENSE,
                 )
+            }
+        }
+
+        @ParameterizedTest
+        @EnumSource(CategoryType::class)
+        fun `지정한 타입이 조회 포트로 전달되고 응답에도 담긴다`(type: CategoryType) {
+            // given
+            every {
+                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월시작, 일월종료, type)
+            } returns emptyList()
+
+            // when
+            val breakdown =
+                statisticsService.categoryBreakdown(DateBasis.SPENT, 일월시작, 일월종료, type)
+
+            // then: 분모가 무엇인지 응답 스스로 밝힌다
+            assertThat(breakdown.type).isEqualTo(type)
+            verify {
+                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월시작, 일월종료, type)
             }
         }
     }

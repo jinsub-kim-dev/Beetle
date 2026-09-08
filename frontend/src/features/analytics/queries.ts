@@ -11,7 +11,8 @@ export function usePeriodSummary(params: PeriodParams) {
   })
 }
 
-export function useCategoryBreakdown(params: PeriodParams, type?: CategoryType) {
+/** 카테고리별 집계. 기본은 지출이며, 수입·이체는 명시적으로 지정한다. */
+export function useCategoryBreakdown(params: PeriodParams, type: CategoryType = 'EXPENSE') {
   return useQuery({
     queryKey: queryKeys.statistics.categories(params, type),
     queryFn: () => statisticsApi.categories(params, type),

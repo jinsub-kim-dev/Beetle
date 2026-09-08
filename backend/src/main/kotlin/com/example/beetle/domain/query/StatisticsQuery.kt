@@ -26,12 +26,18 @@ interface StatisticsQuery {
     /** 기간 요약: 수입/지출/이체 합계와 수지. */
     fun summarize(basis: DateBasis, from: LocalDate, to: LocalDate): PeriodSummary
 
-    /** 카테고리별 집계. 금액 내림차순으로 반환한다. */
+    /**
+     * 카테고리별 집계. 금액 내림차순으로 반환한다.
+     *
+     * [type] 은 필수다. 수입·지출·이체를 한 번에 집계하면 점유율의 분모가 서로 다른
+     * 성질의 금액을 합친 값이 되어 의미를 잃는다. (수입 320만 + 지출 200만의 합계에서
+     * 각 항목이 차지하는 비율은 아무것도 말해주지 않는다)
+     */
     fun aggregateByCategory(
         basis: DateBasis,
         from: LocalDate,
         to: LocalDate,
-        type: CategoryType? = null,
+        type: CategoryType,
     ): List<CategoryAggregate>
 
     /** 결제 수단별 지출 집계. 카드별 지출 점유율의 기반이다 (PRD 2-③). */

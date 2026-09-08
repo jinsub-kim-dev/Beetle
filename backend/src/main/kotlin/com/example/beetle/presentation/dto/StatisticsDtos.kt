@@ -30,8 +30,13 @@ data class PeriodSummaryResponse(
     }
 }
 
-/** 카테고리별 집계 응답. */
+/**
+ * 카테고리별 집계 응답.
+ *
+ * @param type 집계 대상 타입. `total` 과 `sharePercentage` 의 분모가 이 타입으로 한정된다.
+ */
 data class CategoryBreakdownResponse(
+    val type: CategoryType,
     val total: Long,
     val items: List<Item>,
 ) {
@@ -49,6 +54,7 @@ data class CategoryBreakdownResponse(
     companion object {
         fun from(breakdown: CategoryBreakdown): CategoryBreakdownResponse =
             CategoryBreakdownResponse(
+                type = breakdown.type,
                 total = breakdown.total.amount,
                 items = breakdown.items.map { item ->
                     Item(

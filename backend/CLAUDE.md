@@ -104,6 +104,9 @@ com.example.beetle
 - `Category`: `nature`(FIXED/VARIABLE)는 `type == EXPENSE`일 때만 non-null
 - `PaymentMethod`: `paymentDay`는 `CREDIT_CARD`에만 필수(1~31), 그 외 타입은 null
 - `Transaction`: `amount > 0`, `billDate >= spentDate`
+- `Transaction.isSettled`: 등록 시 미지정이면 결제 수단에서 도출한다.
+  즉시 결제 수단은 `true`, 신용카드는 `false`. 도출을 위해 명령 객체의 필드는 nullable 이며,
+  `false` 는 "미정산 명시" 로 해석한다 (PRD 2-①)
 - `InstallmentPlan`: `installmentMonths >= 2`, 회차별 금액의 합계 == `totalAmount`
 
 ### 4.4 비즈니스 로직의 위치 (애너믹 도메인 모델 금지)
@@ -175,7 +178,8 @@ com.example.beetle
 ## 6. 핵심 도메인 개념
 - **Transaction (거래 내역):** 수입(INCOME), 지출(EXPENSE), 이체(TRANSFER). 소비일(`spentDate`)과
   청구일(`billDate`)을 분리 관리. 소비 패턴 분석은 소비일 기준, 현금 흐름 통제는 청구일 기준.
-- **Category (카테고리):** 분류 및 고정비(`FIXED`) / 변동비(`VARIABLE`) 성격 지정.
+- **Category (카테고리):** 단일 계층(flat) 분류 및 고정비(`FIXED`) / 변동비(`VARIABLE`) 성격 지정.
+  상위/하위 카테고리를 두지 않는다 (PRD 2-② 확정 사항).
   전액 회사 지원 통신비 등 실지출이 없는 항목은 `Transaction.isExcludedFromStats`로 집계에서 제외
   (카테고리 단위가 아니라 거래 단위로 판단한다).
 - **PaymentMethod (결제 수단):** 신용카드(우리카드, 삼성카드, 현대카드 등), 체크카드, 계좌, 현금 등

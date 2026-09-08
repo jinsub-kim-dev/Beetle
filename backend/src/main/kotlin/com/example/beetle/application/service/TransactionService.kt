@@ -42,6 +42,11 @@ class TransactionService(
         val billDate = command.billDate
             ?: billDateCalculator.calculate(paymentMethod, command.spentDate)
 
+        // 출금 완료 여부를 지정하지 않았다면 결제 수단에서 도출한다.
+        // 즉시 결제 수단은 소비 시점에 이미 돈이 나갔으므로 출금 완료로 본다.
+        // 이 도출이 없으면 현금 지출이 "아직 출금되지 않은 청구 예정액" 에 잡힌다.
+        val settled = command.isSettled ?: paymentMethod.isImmediateSettlement
+
         return transactionRepository.save(
             Transaction.create(
                 categoryId = command.categoryId,
@@ -50,7 +55,7 @@ class TransactionService(
                 spentDate = command.spentDate,
                 billDate = billDate,
                 memo = command.memo,
-                isSettled = command.isSettled,
+                isSettled = settled,
                 isExcludedFromStats = command.isExcludedFromStats,
             ),
         )

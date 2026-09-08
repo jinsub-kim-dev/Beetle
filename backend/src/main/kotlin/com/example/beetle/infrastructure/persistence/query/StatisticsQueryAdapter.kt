@@ -65,7 +65,7 @@ class StatisticsQueryAdapter(
         basis: DateBasis,
         from: LocalDate,
         to: LocalDate,
-        type: CategoryType?,
+        type: CategoryType,
     ): List<CategoryAggregate> = entityManager
         .createNativeQuery(
             """
@@ -73,15 +73,15 @@ class StatisticsQueryAdapter(
             FROM transaction t
                      JOIN category c ON c.id = t.category_id
             WHERE t.is_excluded_from_stats = FALSE
+              AND c.type = :type
               AND t.${basis.dateColumn} BETWEEN :from AND :to
-              AND (:type IS NULL OR c.type = :type)
             GROUP BY c.id, c.name, c.type, c.nature
             ORDER BY SUM(t.amount) DESC, c.id ASC
             """.trimIndent(),
         )
         .setParameter("from", from)
         .setParameter("to", to)
-        .setParameter("type", type?.name)
+        .setParameter("type", type.name)
         .resultList
         .map { it as Array<*> }
         .map { row ->

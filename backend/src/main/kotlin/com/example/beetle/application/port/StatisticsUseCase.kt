@@ -23,12 +23,17 @@ interface StatisticsUseCase {
     /** 기간 요약: 수입/지출/이체 합계와 수지. */
     fun periodSummary(basis: DateBasis, from: LocalDate, to: LocalDate): PeriodSummary
 
-    /** 카테고리별 집계와 점유율. */
+    /**
+     * 카테고리별 집계와 점유율.
+     *
+     * [type] 을 생략하면 **지출**을 집계한다. 가계부의 기본 관심사가 "어디에 썼나" 이기
+     * 때문이다. 수입이나 이체를 보려면 명시적으로 지정한다.
+     */
     fun categoryBreakdown(
         basis: DateBasis,
         from: LocalDate,
         to: LocalDate,
-        type: CategoryType? = null,
+        type: CategoryType = CategoryType.EXPENSE,
     ): CategoryBreakdown
 
     /** 결제 수단별 지출 점유율 (PRD 2-③: 카드별 지출 점유율). */
@@ -56,8 +61,13 @@ interface StatisticsUseCase {
     fun monthlyTrend(basis: DateBasis, from: YearMonth, to: YearMonth): List<MonthlySummary>
 }
 
-/** 카테고리별 집계와 점유율. */
+/**
+ * 카테고리별 집계와 점유율.
+ *
+ * @param type 집계 대상 타입. 점유율의 분모가 무엇인지 응답 스스로 밝히기 위해 포함한다.
+ */
 data class CategoryBreakdown(
+    val type: CategoryType,
     val total: Money,
     val items: List<CategoryShareItem>,
 )

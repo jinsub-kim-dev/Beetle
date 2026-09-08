@@ -162,6 +162,7 @@ class StatisticsControllerTest {
             // given
             every { statisticsUseCase.categoryBreakdown(any(), any(), any(), any()) } returns
                 CategoryBreakdown(
+                    type = CategoryType.EXPENSE,
                     total = Money.of(1_000_000),
                     items = listOf(
                         CategoryShareItem(
@@ -188,6 +189,8 @@ class StatisticsControllerTest {
                     .param("to", "2026-01-31"),
             )
                 .andExpect(status().isOk)
+                // 점유율의 분모가 무엇인지 응답 스스로 밝힌다
+                .andExpect(jsonPath("$.type").value("EXPENSE"))
                 .andExpect(jsonPath("$.total").value(1000000))
                 .andExpect(jsonPath("$.items.length()").value(2))
                 .andExpect(jsonPath("$.items[0].categoryName").value("월세"))
@@ -198,17 +201,16 @@ class StatisticsControllerTest {
         }
 
         @Test
-        fun `타입 필터가 전달된다`() {
+        fun `타입을 생략하면 지출을 집계한다`() {
             // given
             every { statisticsUseCase.categoryBreakdown(any(), any(), any(), any()) } returns
-                CategoryBreakdown(Money.ZERO, emptyList())
+                CategoryBreakdown(CategoryType.EXPENSE, Money.ZERO, emptyList())
 
             // when
             mockMvc.perform(
                 get("/api/statistics/categories")
                     .param("from", "2026-01-01")
-                    .param("to", "2026-01-31")
-                    .param("type", "EXPENSE"),
+                    .param("to", "2026-01-31"),
             ).andExpect(status().isOk)
 
             // then
@@ -223,10 +225,48 @@ class StatisticsControllerTest {
         }
 
         @Test
+        fun `수입 타입을 지정하면 그대로 전달된다`() {
+            // given
+            every { statisticsUseCase.categoryBreakdown(any(), any(), any(), any()) } returns
+                CategoryBreakdown(CategoryType.INCOME, Money.ZERO, emptyList())
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/categories")
+                    .param("from", "2026-01-01")
+                    .param("to", "2026-01-31")
+                    .param("type", "INCOME"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.type").value("INCOME"))
+
+            verify {
+                statisticsUseCase.categoryBreakdown(
+                    DateBasis.SPENT,
+                    LocalDate.of(2026, 1, 1),
+                    LocalDate.of(2026, 1, 31),
+                    CategoryType.INCOME,
+                )
+            }
+        }
+
+        @Test
+        fun `알 수 없는 타입은 400 을 반환한다`() {
+            mockMvc.perform(
+                get("/api/statistics/categories")
+                    .param("from", "2026-01-01")
+                    .param("to", "2026-01-31")
+                    .param("type", "UNKNOWN"),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"))
+        }
+
+        @Test
         fun `집계 대상이 없으면 빈 항목과 0원을 반환한다`() {
             // given
             every { statisticsUseCase.categoryBreakdown(any(), any(), any(), any()) } returns
-                CategoryBreakdown(Money.ZERO, emptyList())
+                CategoryBreakdown(CategoryType.EXPENSE, Money.ZERO, emptyList())
 
             // when & then
             mockMvc.perform(

@@ -9,13 +9,16 @@ import com.example.beetle.domain.exception.ResourceNotFoundException
 import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.Money
+import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
+import com.example.beetle.domain.model.PaymentMethodType
 import com.example.beetle.domain.model.Transaction
 import com.example.beetle.domain.model.TransactionId
 import com.example.beetle.domain.repository.CategoryRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.domain.service.BillDateCalculator
+import com.example.beetle.fixture.bankAccount
 import com.example.beetle.fixture.cash
 import com.example.beetle.fixture.creditCard
 import com.example.beetle.fixture.expenseCategory
@@ -31,6 +34,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.EnumSource
 import java.time.LocalDate
 
 @DisplayName("TransactionService 유스케이스")
@@ -107,6 +112,105 @@ class TransactionServiceTest {
 
             // then
             assertThat(saved.captured.billDate).isEqualTo(LocalDate.of(2026, 1, 10))
+        }
+
+        @ParameterizedTest
+        @EnumSource(PaymentMethodType::class, names = ["CHECK_CARD", "BANK_ACCOUNT", "CASH"])
+        fun `즉시 결제 수단은 출금 완료 여부를 지정하지 않으면 정산 완료로 등록된다`(
+            type: PaymentMethodType,
+        ) {
+            // given: 현금·체크카드·계좌는 소비 시점에 이미 돈이 나갔다.
+            // 미정산으로 남으면 이미 나간 돈이 "청구 예정액" 에 잡힌다.
+            every { paymentMethodRepository.findById(PaymentMethodId(2L)) } returns
+                PaymentMethod.create(type.name, type).assignId(PaymentMethodId(2L))
+            val saved = slot<Transaction>()
+            every { transactionRepository.save(capture(saved)) } answers {
+                saved.captured.assignId(TransactionId(1L))
+            }
+
+            // when
+            transactionService.register(
+                RegisterTransactionCommand(
+                    categoryId = CategoryId(1L),
+                    paymentMethodId = PaymentMethodId(2L),
+                    amount = Money.of(7_000),
+                    spentDate = LocalDate.of(2026, 1, 14),
+                ),
+            )
+
+            // then
+            assertThat(saved.captured.isSettled).isTrue()
+            assertThat(saved.captured.billDate).isEqualTo(saved.captured.spentDate)
+        }
+
+        @Test
+        fun `신용카드는 출금 완료 여부를 지정하지 않으면 미정산으로 등록된다`() {
+            // given: 청구일에 출금되므로 등록 시점에는 아직 나가지 않은 돈이다
+            val saved = slot<Transaction>()
+            every { transactionRepository.save(capture(saved)) } answers {
+                saved.captured.assignId(TransactionId(1L))
+            }
+
+            // when
+            transactionService.register(
+                RegisterTransactionCommand(
+                    categoryId = CategoryId(1L),
+                    paymentMethodId = PaymentMethodId(1L),
+                    amount = Money.of(45_000),
+                    spentDate = LocalDate.of(2026, 1, 10),
+                ),
+            )
+
+            // then
+            assertThat(saved.captured.isSettled).isFalse()
+        }
+
+        @Test
+        fun `즉시 결제 수단도 미정산을 명시하면 그 값을 따른다`() {
+            // given: 미래 날짜의 계좌 자동이체처럼 아직 나가지 않은 경우
+            every { paymentMethodRepository.findById(PaymentMethodId(2L)) } returns
+                bankAccount(id = 2L)
+            val saved = slot<Transaction>()
+            every { transactionRepository.save(capture(saved)) } answers {
+                saved.captured.assignId(TransactionId(1L))
+            }
+
+            // when
+            transactionService.register(
+                RegisterTransactionCommand(
+                    categoryId = CategoryId(1L),
+                    paymentMethodId = PaymentMethodId(2L),
+                    amount = Money.of(750_000),
+                    spentDate = LocalDate.of(2026, 3, 5),
+                    isSettled = false,
+                ),
+            )
+
+            // then
+            assertThat(saved.captured.isSettled).isFalse()
+        }
+
+        @Test
+        fun `신용카드도 정산 완료를 명시하면 그 값을 따른다`() {
+            // given: 과거 거래를 소급 입력하는 경우
+            val saved = slot<Transaction>()
+            every { transactionRepository.save(capture(saved)) } answers {
+                saved.captured.assignId(TransactionId(1L))
+            }
+
+            // when
+            transactionService.register(
+                RegisterTransactionCommand(
+                    categoryId = CategoryId(1L),
+                    paymentMethodId = PaymentMethodId(1L),
+                    amount = Money.of(45_000),
+                    spentDate = LocalDate.of(2025, 11, 10),
+                    isSettled = true,
+                ),
+            )
+
+            // then
+            assertThat(saved.captured.isSettled).isTrue()
         }
 
         @Test

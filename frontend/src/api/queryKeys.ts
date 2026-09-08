@@ -35,8 +35,8 @@ export const queryKeys = {
   statistics: {
     all: ['statistics'] as const,
     summary: (params: PeriodParams) => ['statistics', 'summary', params] as const,
-    categories: (params: PeriodParams, type?: CategoryType) =>
-      ['statistics', 'categories', params, type ?? 'ALL'] as const,
+    categories: (params: PeriodParams, type: CategoryType) =>
+      ['statistics', 'categories', params, type] as const,
     paymentMethods: (params: PeriodParams) => ['statistics', 'paymentMethods', params] as const,
     expenseNature: (params: PeriodParams) => ['statistics', 'expenseNature', params] as const,
     upcomingBills: (month: YearMonthString) => ['statistics', 'upcomingBills', month] as const,

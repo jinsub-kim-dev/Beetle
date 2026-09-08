@@ -143,6 +143,35 @@ class TransactionControllerTest {
         }
 
         @Test
+        fun `settled 를 생략하면 명령에 null 로 전달되어 서버가 도출한다`() {
+            // given
+            every { transactionUseCase.register(any()) } returns transaction(id = 1L)
+
+            // when
+            mockMvc.perform(
+                post("/api/transactions")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        """{"categoryId":1,"paymentMethodId":1,"amount":10000,"spentDate":"2026-01-10"}""",
+                    ),
+            ).andExpect(status().isCreated)
+
+            // then: false 가 아니라 null 이어야 한다. false 면 "미정산" 을 명시한 것으로
+            // 해석되어 결제 수단 기반 도출이 동작하지 않는다.
+            verify {
+                transactionUseCase.register(
+                    RegisterTransactionCommand(
+                        categoryId = CategoryId(1L),
+                        paymentMethodId = PaymentMethodId(1L),
+                        amount = Money.of(10_000),
+                        spentDate = LocalDate.of(2026, 1, 10),
+                        isSettled = null,
+                    ),
+                )
+            }
+        }
+
+        @Test
         fun `할부 회차 거래는 회차 정보가 응답에 포함된다`() {
             // given
             every { transactionUseCase.register(any()) } returns

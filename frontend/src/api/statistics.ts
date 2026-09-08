@@ -18,9 +18,18 @@ export const statisticsApi = {
     return data
   },
 
-  async categories(params: PeriodParams, type?: CategoryType): Promise<CategoryBreakdown> {
+  /**
+   * 카테고리별 집계.
+   *
+   * `type` 을 항상 전달한다. 서버에도 기본값이 있지만, 무엇을 집계하는지
+   * 클라이언트 코드에서 드러나는 편이 낫다.
+   */
+  async categories(
+    params: PeriodParams,
+    type: CategoryType = 'EXPENSE',
+  ): Promise<CategoryBreakdown> {
     const { data } = await apiClient.get<CategoryBreakdown>(`${BASE_PATH}/categories`, {
-      params: type ? { ...params, type } : params,
+      params: { ...params, type },
     })
     return data
   },

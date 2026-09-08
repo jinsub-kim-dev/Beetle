@@ -73,6 +73,11 @@ export interface RegisterTransactionRequest {
   memo?: string
   /** 생략하면 결제 수단의 결제 조건으로부터 서버가 산출한다. */
   billDate?: IsoDate
+  /**
+   * 출금 완료 여부. **생략하면 서버가 결제 수단으로부터 도출한다.**
+   * 즉시 결제 수단(현금·체크카드·계좌)은 `true`, 신용카드는 `false` 가 된다.
+   * `false` 를 명시하면 "미정산" 을 지정한 것으로 해석되어 도출이 일어나지 않는다.
+   */
   settled?: boolean
   excludedFromStats?: boolean
 }
@@ -141,6 +146,13 @@ export interface CategoryBreakdownItem {
 }
 
 export interface CategoryBreakdown {
+  /**
+   * 집계 대상 타입. `total` 과 각 항목의 `sharePercentage` 의 분모가 이 타입으로 한정된다.
+   *
+   * 서버는 수입·지출·이체를 한 번에 집계하지 않는다. 성질이 다른 금액을 한 분모에
+   * 섞으면 점유율이 의미를 잃기 때문이다.
+   */
+  type: CategoryType
   total: number
   items: CategoryBreakdownItem[]
 }

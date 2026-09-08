@@ -46,7 +46,7 @@ class StatisticsService(
         basis: DateBasis,
         from: LocalDate,
         to: LocalDate,
-        type: CategoryType?,
+        type: CategoryType,
     ): CategoryBreakdown {
         validatePeriod(from, to)
 
@@ -54,6 +54,7 @@ class StatisticsService(
         val total = Money.sum(aggregates.map { it.total })
 
         return CategoryBreakdown(
+            type = type,
             total = total,
             items = aggregates.map { CategoryShareItem(it, Ratio.of(it.total, total)) },
         )

@@ -191,7 +191,7 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
 
             // when
             val aggregates = statisticsQuery.aggregateByCategory(
-                DateBasis.SPENT, 일월.start, 일월.endInclusive,
+                DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.EXPENSE,
             )
 
             // then
@@ -211,7 +211,7 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
 
             // when
             val aggregate = statisticsQuery.aggregateByCategory(
-                DateBasis.SPENT, 일월.start, 일월.endInclusive,
+                DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.EXPENSE,
             ).single()
 
             // then
@@ -250,12 +250,16 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
 
             // when
             val aggregates = statisticsQuery.aggregateByCategory(
-                DateBasis.SPENT, 일월.start, 일월.endInclusive,
+                DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.EXPENSE,
             ).associateBy { it.categoryName }
 
             // then
             assertThat(aggregates["월세"]!!.nature).isEqualTo(ExpenseNature.FIXED)
-            assertThat(aggregates["급여"]!!.nature).isNull()
+            // 수입 카테고리는 성격이 없다. 타입을 나눠 조회해야 확인할 수 있다.
+            val incomes = statisticsQuery.aggregateByCategory(
+                DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.INCOME,
+            ).associateBy { it.categoryName }
+            assertThat(incomes["급여"]!!.nature).isNull()
         }
 
         @Test
@@ -266,7 +270,9 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
 
             // when & then
             assertThat(
-                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월.start, 일월.endInclusive),
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.EXPENSE,
+                ),
             ).hasSize(1)
         }
 
@@ -278,7 +284,9 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
 
             // when & then
             assertThat(
-                statisticsQuery.aggregateByCategory(DateBasis.SPENT, 일월.start, 일월.endInclusive),
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT, 일월.start, 일월.endInclusive, CategoryType.EXPENSE,
+                ),
             ).isEmpty()
         }
     }
