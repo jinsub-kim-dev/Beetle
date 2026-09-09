@@ -1,245 +1,323 @@
 # Beetle
 
-개인 맞춤형 가계부 시스템. 엑셀이나 범용 템플릿의 한계를 벗어나 소비 패턴을 분석하고
-현금 흐름을 통제하는 것을 목표로 한다.
+개인 맞춤형 가계부 시스템. 이 문서는 **실행과 배포 방법**만 다룬다.
 
-- 기획/요구사항: [BEETLE_PRD.md](BEETLE_PRD.md)
-- 개발 원칙: [CLAUDE.md](CLAUDE.md), [backend/CLAUDE.md](backend/CLAUDE.md)
+- 도메인 요구사항: [BEETLE_PRD.md](BEETLE_PRD.md)
+- 개발 원칙: [CLAUDE.md](CLAUDE.md) · [backend/CLAUDE.md](backend/CLAUDE.md) · [frontend/CLAUDE.md](frontend/CLAUDE.md)
 
----
+**로컬(dev)이 기본값이고, 배포(prod)는 명시해야 한다.** 파일이나 프로필 지정을 빠뜨렸을 때
+운영 설정이 아니라 로컬 설정으로 뜨는 방향이 안전하기 때문이다.
 
-## 1. 핵심 개념
-
-이 가계부가 범용 템플릿과 다른 지점은 네 가지다.
-
-### 소비일과 청구일의 분리
-카드를 긁은 날(`spentDate`)과 통장에서 돈이 빠져나가는 날(`billDate`)을 따로 저장한다.
-조회·통계 API의 `basis` 파라미터로 두 축을 전환한다.
-
-| `basis` | 의미 | 용도 |
+| | 로컬(dev) | 원격 배포(prod) |
 |---|---|---|
-| `SPENT` | 소비일 기준 | "이번 달에 얼마를 썼나" — 소비 패턴 분석 |
-| `BILL` | 청구일 기준 | "이번 달에 통장에서 얼마가 나가나" — 현금 흐름 통제 |
-
-청구일은 결제 수단의 결제일·마감일로부터 자동 산출된다. 결제일이 31일인 카드의 2월
-청구일은 말일(윤년이면 29일)로 보정되고, 마감일을 넘긴 소비는 한 청구 주기 뒤로 밀린다.
-
-### 고정비와 변동비 분리
-지출 카테고리는 `FIXED`(월세·통신비 등) 또는 `VARIABLE`(식비·쇼핑 등) 성격을 갖는다.
-예산 통제의 기준이 되므로 지출 카테고리에는 성격이 필수다.
-
-### 할부의 회차 분할
-대형 지출을 한 번에 잡으면 특정 월의 통계가 왜곡된다. 할부 계획을 등록하면 회차별
-거래가 각 청구일로 자동 생성된다. 월 납부액은 총액과 개월 수에서 서버가 계산하며,
-나머지는 1회차에 가산되어 **회차 금액의 합은 항상 총액과 정확히 일치한다.**
-
-### 거래 단위 통계 제외
-회사가 전액 지원하는 통신비처럼 기록은 남기되 실지출이 없는 항목은
-거래 단위 `excludedFromStats` 플래그로 모든 집계에서 제외한다. 카테고리 단위가 아닌
-이유는, 같은 카테고리에서도 자부담분이 있는 거래와 없는 거래가 섞이기 때문이다.
+| 명령 | `docker compose up -d --build` | `docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build` |
+| 함께 읽는 파일 | `docker-compose.override.yml` (자동) | `docker-compose.prod.yml` (`-f` 로 명시) |
+| 백엔드 프로필 | `dev` (미지정 시 기본) | `prod` |
 
 ---
 
-## 2. 실행
+## 1. 요구 사항
 
-### 요구 사항
-- Docker (Docker Desktop / Rancher Desktop / Colima 모두 가능)
-- 로컬에서 직접 빌드하려면 JDK 17
+로컬과 원격 모두 **Docker 하나만** 있으면 된다. 빌드가 컨테이너 안에서 일어나므로 호스트에
+JDK 나 Node 를 설치하지 않아도 된다.
 
-### 로컬(dev) 실행 — 기본
 ```bash
-docker compose up --build -d
+docker compose version   # v2 이상
 ```
 
-`docker-compose.override.yml` 이 자동으로 함께 적용되어 로컬 환경으로 뜬다.
-**로컬이 기본값**이며, 배포는 명시해야 한다. 설정을 빠뜨렸을 때 운영이 아니라 로컬로
-뜨는 방향이 안전하다.
+- Docker Desktop / Rancher Desktop / Colima / Docker Engine 모두 가능하다.
+- 컨테이너 없이 **백엔드만** IDE 에서 띄우려면 JDK 17, **프론트엔드 개발 서버**(HMR)를
+  쓰려면 Node 22 가 추가로 필요하다. (2.4절)
 
-- **웹 화면: http://localhost:5173**
-- 백엔드: http://localhost:8080
-- API 문서: http://localhost:8080/swagger-ui.html
-- 헬스체크: http://localhost:8080/actuator/health
+---
 
-프론트엔드 컨테이너의 nginx 가 `/api` 를 백엔드로 프록시하므로, 브라우저는 하나의
-오리진만 보게 되고 CORS 설정이 필요하지 않습니다.
+## 2. 로컬(dev) 실행
 
-종료:
+### 2.1 전체 기동
+
 ```bash
-docker compose down
+docker compose up -d --build
+```
+
+`docker-compose.override.yml` 이 자동으로 함께 적용되어 로컬 환경으로 뜬다. MySQL,
+백엔드, 프론트엔드가 순서대로 기동하며 백엔드는 MySQL 이 준비될 때까지 기다린다.
+
+| 대상 | 주소 |
+|---|---|
+| **웹 화면** | **http://localhost:5173** |
+| 백엔드 API | http://localhost:8080 |
+| API 문서 | http://localhost:8080/swagger-ui.html |
+| 헬스체크 | http://localhost:8080/actuator/health |
+| MySQL | `localhost:13306` (계정 `beetle` / `beetlepassword`) |
+
+- 프론트엔드 컨테이너의 nginx 가 `/api` 를 백엔드로 프록시한다. 브라우저는 하나의 오리진만
+  보게 되므로 CORS 설정이 필요 없다.
+- 첫 기동 시 Flyway 가 스키마와 **시드 데이터**(기본 카테고리 13종, 결제 수단 `현금`)를
+  적용하므로, 손으로 데이터를 만들지 않아도 화면이 채워진다.
+- MySQL 만 표준 포트(3306)를 피한다. 호스트에 이미 MySQL 이 있는 환경에서 충돌하기 때문이며,
+  컨테이너 안쪽 포트는 3306 그대로다.
+
+### 2.2 종료와 초기화
+
+```bash
+docker compose down      # 종료 (데이터 유지)
+docker compose down -v   # 데이터까지 삭제
 ```
 
 데이터는 Docker Volume(`beetle-mysql-data`)에 보존되므로 컨테이너를 재생성해도 남는다.
-데이터까지 지우려면 `docker compose down -v` 를 사용한다.
 
-### 배포(prod) 실행
-```bash
-cp .env.example .env       # DB 계정과 비밀번호를 실제 값으로 채운다
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
-```
-
-- 외부에 노출되는 것은 **프론트엔드 하나뿐**이다(기본 `:80`). 백엔드와 MySQL 포트는
-  호스트에 열지 않는다.
-- **접속 정보가 없으면 기동에 실패한다.** 기본 비밀번호로 배포되는 것보다 뜨지 않는 편이 낫다.
-- 시드 데이터(`db/seed`)를 적용하지 않으므로 빈 상태로 시작한다.
-- API 문서(`/swagger-ui.html`, `/v3/api-docs`)와 `health` 외의 관리 엔드포인트는 404 다.
-
-| 항목 | 로컬(dev) | 배포(prod) |
-|---|---|---|
-| 백엔드 설정 | `application-dev.yml` (프로필 미지정 시 기본) | `application-prod.yml` |
-| 프론트엔드 설정 | `.env.development` | `.env.production` |
-| 컨테이너 | `docker-compose.override.yml` (자동) | `docker-compose.prod.yml` (`-f` 로 명시) |
-| DB 접속 정보 | 기본값 있음 | 없으면 기동 실패 |
-| 시드 데이터 | 적용 | 미적용 |
-| API 문서 | 노출 | 차단 |
-| 노출 포트 | 프론트(5173)·백엔드(8080)·MySQL(13306) | 프론트엔드만 |
-| 프론트엔드 소스맵 | 포함 | 미포함 |
-| 화면 배지 | `LOCAL` | 없음 |
-
-이 차이는 `ProfileConfigurationTest` 가 설정 파일을 직접 읽어 검증한다. 설정을 고치다
-정책을 깨면 `./gradlew check` 가 실패한다.
-
-### 포트가 이미 사용 중일 때
-`.env.example` 을 `.env` 로 복사해 포트를 바꾼다.
+### 2.3 포트가 이미 사용 중일 때
 
 ```bash
 cp .env.example .env
-# .env 에서 FRONTEND_PORT=15173, BACKEND_PORT=18080 등으로 수정
+# .env 에서 FRONTEND_PORT / BACKEND_PORT / DB_PORT 를 바꾼다
 docker compose up -d
 ```
 
-> 8080 포트를 다른 프로세스가 점유하고 있으면 컨테이너는 정상 기동하지만 호스트에서
-> 접근이 되지 않는다. `lsof -nP -iTCP:8080 -sTCP:LISTEN` 으로 확인할 수 있다.
+> 해당 포트를 다른 프로세스가 점유하고 있으면 **컨테이너는 정상 기동하지만 호스트에서
+> 접근되지 않는다.** 화면이 열리지 않으면 먼저
+> `lsof -nP -iTCP:5173 -sTCP:LISTEN` 으로 점유 여부를 확인한다.
+>
+> 점유한 프로세스가 없는데도 접근이 안 되면, 컨테이너를 만들 때 포트가 막혀 있어 포트
+> 전달이 붙지 못한 상태일 수 있다(`docker compose ps` 는 매핑을 보여주지만 실제로는
+> 열리지 않는다). `docker compose down && docker compose up -d` 로 다시 만든다.
 
-### 로컬 개발
+`DB_PORT` 를 바꾸면 백엔드를 IDE 에서 띄울 때 붙는 포트도 함께 바뀐다.
+(`application-dev.yml` 의 기본값이 compose 노출 포트와 같아야 하며, 두 값이 어긋나면
+`ProfileConfigurationTest` 가 실패한다)
 
-백엔드만 IDE 에서 실행:
+### 2.4 일부만 컨테이너로 띄우기
+
+**백엔드를 IDE 나 Gradle 로 띄울 때** — DB 만 컨테이너로 올린다.
+
 ```bash
 docker compose up -d mysql
 cd backend && ./gradlew bootRun
 ```
-프로필을 지정하지 않으면 dev 로 뜬다. `application-dev.yml` 의 DataSource 기본값이
-`localhost:13306` — compose 가 MySQL 을 노출하는 포트 — 이므로 추가 설정 없이 붙는다.
-표준 포트(3306)를 쓰지 않는 이유는 호스트에 이미 MySQL 이 있는 환경에서 충돌하기 때문이다.
-두 값이 어긋나면 `ProfileConfigurationTest` 가 실패한다.
 
-프론트엔드를 Vite 개발 서버(HMR)로 실행:
+프로필을 지정하지 않으면 dev 로 뜨고, `localhost:13306` 의 컨테이너 DB 에 그대로 붙는다.
+포트를 바꾸려면 `SERVER_PORT=18080 ./gradlew bootRun`.
+
+**프론트엔드를 Vite 개발 서버(HMR)로 띄울 때** — DB 와 백엔드를 컨테이너로 올린다.
+
 ```bash
 docker compose up -d mysql backend
 cd frontend && npm install && npm run dev
 ```
+
 Vite 가 `/api` 를 `http://localhost:8080` 으로 프록시한다. 백엔드 포트를 바꿨다면
 `frontend/.env.development.local` 에 `VITE_API_PROXY_TARGET` 을 지정한다.
+(`.env.development` 는 팀 공용 기본값이므로 개인 설정은 `*.local` 에 둔다)
 
----
-
-## 3. 테스트
+### 2.5 검증
 
 ```bash
-cd backend && ./gradlew check
+cd backend  && ./gradlew check   # 테스트 + 도메인 커버리지 + 규칙 강제
+cd frontend && npm run check     # 타입 검사 + 린트 + 테스트
 ```
+
+통합 테스트는 Testcontainers 로 **실제 MySQL** 을 띄우므로 Docker 가 실행 중이어야 한다.
+(Rancher Desktop·Colima 의 소켓 경로는 Gradle 이 자동 탐지한다)
+
+---
+
+## 3. 원격 배포(prod)
+
+### 3.1 배포 전에 반드시 읽을 것
+
+이 시스템은 **"프라이빗 가계부"** 전제로 만들어졌다. 공개 인터넷에 그대로 노출하면 안 된다.
+
+- **인증이 없다.** 단일 사용자를 가정해 로그인을 구현하지 않았다(PRD 8.3). 주소를 아는
+  누구나 가계부를 읽고 쓰고 지울 수 있다.
+- **HTTPS 가 없다.** nginx 는 80 포트로 평문 제공한다.
+
+따라서 아래 중 하나를 **먼저** 갖춘 뒤 배포한다.
+
+- 사설망 안에서만 접근 (홈 서버 + VPN, 회사 내부망 등)
+- 방화벽·보안 그룹으로 접근 IP 를 자신의 것만 허용
+- 앞단에 인증과 TLS 를 붙인 리버스 프록시 (Cloudflare Tunnel + Access, Caddy + basic auth,
+  nginx + oauth2-proxy 등)
+
+### 3.2 원격 호스트 준비
+
+Docker 와 Compose v2 만 설치한다. 소스 빌드는 컨테이너 안에서 일어나므로 JDK·Node 는
+필요 없다.
+
 ```bash
-cd frontend && npm run check
+# 예: Ubuntu — Docker 공식 설치 스크립트
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker "$USER"   # 재로그인 후 적용
+docker compose version
 ```
 
-- `./gradlew check` = 테스트 + 도메인 커버리지 검증
-- `npm run check` = 타입 검사 + 린트 + 테스트
+메모리는 **2GB 이상**을 권한다. 백엔드 이미지 빌드 시 Gradle 이 의존성을 내려받고
+컴파일하므로 첫 빌드는 몇 분 걸린다.
 
-- 통합 테스트는 Testcontainers 로 **실제 MySQL** 을 띄운다. Docker 가 실행 중이어야 한다.
-  (Rancher Desktop·Colima 의 소켓 경로는 Gradle 이 자동 탐지한다)
-- 아키텍처 규칙만 확인: `./gradlew test --tests '*ArchitectureTest'`
+### 3.3 소스와 `.env` 준비
 
-테스트는 규칙을 문서가 아니라 실패로 강제한다.
+```bash
+git clone -b dev https://github.com/jinsub-kim-dev/Beetle.git
+cd Beetle
+cp .env.example .env
+```
 
-| 테스트 | 강제하는 규칙 |
-|---|---|
-| `ArchitectureTest` | 레이어 의존 방향, 도메인의 프레임워크 독립성, JPA 엔티티 노출 금지 |
-| `DomainModelConventionTest` | 애그리거트 루트의 `data class` 금지, 식별자 기반 동일성 |
-| `MockKValueClassConventionTest` | 값 객체 파라미터에 `any()` 매처 사용 금지 (flaky 테스트 방지) |
-| `ProfileConfigurationTest` | 환경별 설정 정책 (배포에 시드 금지, 접속 정보 기본값 금지 등) |
-| JaCoCo 커버리지 검증 | 도메인 레이어 분기 커버리지 90% 이상 |
-| Vitest `thresholds` (frontend) | `lib/`·`store/` 순수 로직 커버리지 90% 이상 |
-| ESLint `no-explicit-any` (frontend) | `any` 배제 |
+> **브랜치를 지정한다.** 현재 개발은 `dev` 브랜치에서 이뤄지고 있고 `main` 에는 저장소
+> 초기 커밋만 있다. 브랜치를 빼고 clone 하면 빈 프로젝트를 받는다.
+
+`.env` 에서 **아래 네 값은 필수**다. 배포 프로필은 접속 정보에 기본값을 두지 않으므로,
+값이 없으면 컨테이너가 기동에 실패한다. 기본 비밀번호로 배포되는 것보다 뜨지 않는 편이 낫다.
+
+```bash
+MYSQL_ROOT_PASSWORD=<직접 생성한 값>
+DB_NAME=beetle
+DB_USER=beetle
+DB_PASSWORD=<직접 생성한 값>
+
+# 외부에 노출할 포트 (기본 80)
+FRONTEND_PORT=80
+```
+
+```bash
+chmod 600 .env   # 비밀번호가 담기므로 권한을 좁힌다
+```
+
+> `.env` 는 커밋되지 않는다(`.gitignore`). 비밀번호를 저장소에 넣지 않는다.
+
+**명령을 짧게 쓰려면** `.env` 에 아래 한 줄을 넣는다. 그 호스트에서는 `docker compose up -d`
+만으로 배포 구성이 적용된다.
+
+```bash
+COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+```
+
+배포 전용 호스트에서만 쓴다. 개발 머신에 넣으면 로컬 기동이 배포 구성으로 바뀐다.
+
+### 3.4 기동
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+- 외부에 열리는 것은 **프론트엔드 하나뿐**이다. 백엔드와 MySQL 포트는 호스트에 노출하지
+  않으며, 브라우저가 보는 오리진은 프론트엔드 하나다(nginx 가 `/api` 를 프록시).
+- 백엔드가 뜰 때 Flyway 가 스키마 마이그레이션을 적용한다. **시드 데이터는 적용하지
+  않으므로 빈 상태로 시작한다.** 카테고리와 결제 수단을 설정 화면에서 직접 등록한다.
+- 비어 있지 않은 DB 에 처음 배포하면 **의도적으로 실패한다**(`baseline-on-migrate` 금지).
+  기존 스키마를 자동으로 기준선 처리하면 마이그레이션 이력이 어긋나므로, 그때는 사람이
+  판단해야 한다.
+
+### 3.5 배포 확인
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+curl -fsS http://localhost/actuator/health     # {"groups":[...],"status":"UP"}
+curl -fsS http://localhost/api/categories      # 첫 배포 직후에는 []
+```
+
+프로필이 제대로 적용됐는지 로그로 확인한다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend | grep "profile is active"
+# The following 1 profile is active: "prod"
+```
+
+배포 환경에서는 아래가 모두 **404** 여야 정상이다. 스펙과 내부 구조를 드러낼 이유가 없다.
+
+```bash
+curl -o /dev/null -w '%{http_code}\n' http://localhost/swagger-ui.html   # 404
+curl -o /dev/null -w '%{http_code}\n' http://localhost/v3/api-docs       # 404
+curl -o /dev/null -w '%{http_code}\n' http://localhost/actuator/env      # 404
+```
+
+### 3.6 갱신 (재배포)
+
+```bash
+git pull origin dev
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+이미지를 다시 빌드하고 바뀐 서비스만 교체한다. 컨테이너가 교체되는 몇 초 동안 화면이
+끊기며, 백엔드는 진행 중인 요청을 마치고 종료한다(graceful shutdown).
+
+- 새 마이그레이션이 있으면 백엔드 기동 시 자동으로 적용된다.
+- **마이그레이션은 되돌릴 수 없다.** 스키마를 바꾸는 배포 전에는 3.7절로 백업한다.
+
+### 3.7 백업과 복구
+
+데이터는 Docker Volume 에 있으므로 컨테이너를 지워도 남지만, `down -v` 나 호스트 장애에는
+같이 사라진다. **정기 백업을 별도로 둔다.**
+
+```bash
+# 백업 (.env 의 값을 사용한다)
+source .env
+docker exec -e MYSQL_PWD="$DB_PASSWORD" beetle-mysql \
+  mysqldump -u"$DB_USER" --single-transaction --no-tablespaces "$DB_NAME" \
+  > "beetle-$(date +%Y%m%d).sql"
+```
+
+```bash
+# 복구
+source .env
+docker exec -i -e MYSQL_PWD="$DB_PASSWORD" beetle-mysql \
+  mysql -u"$DB_USER" "$DB_NAME" < beetle-20260909.sql
+```
+
+- `--single-transaction` 은 백업 중 쓰기를 막지 않으면서 일관된 시점을 뜬다.
+- `--no-tablespaces` 가 없으면 `PROCESS privilege` 경고가 나온다. 애플리케이션 계정에는
+  그 권한이 없고 필요하지도 않다.
+- 비밀번호에 공백이나 `$` 가 있으면 `.env` 에서 따옴표로 감싼다(`source` 로 읽기 때문).
+- cron 에 걸어 두고, 덤프 파일은 **호스트 밖으로** 옮긴다. 같은 디스크에 두면 호스트 장애에
+  함께 사라진다.
+
+### 3.8 로그와 상태
+
+3.3 절의 `COMPOSE_FILE` 을 `.env` 에 넣었다면 아래 명령에서 `-f` 두 개를 생략할 수 있다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs -f backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml logs --tail 100 backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+docker compose -f docker-compose.yml -f docker-compose.prod.yml restart backend
+docker compose -f docker-compose.yml -f docker-compose.prod.yml down
+```
+
+> 셸 변수에 `-f ...` 를 담아 `docker compose $COMPOSE ...` 로 쓰는 방식은 zsh 에서
+> 동작하지 않는다. zsh 는 따옴표 없는 변수를 단어로 쪼개지 않아 인자 하나로 넘어간다.
+> `COMPOSE_FILE` 을 쓰거나 명령을 그대로 적는다.
+
+배포 프로필의 로그 수준은 `INFO` 이며 SQL 을 남기지 않는다. 오류 응답에도 예외 메시지와
+스택을 담지 않고 `code`/`message` 만 노출한다(PRD 7.1).
+
+### 3.9 되돌리기
+
+```bash
+git checkout <이전 커밋>
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+애플리케이션은 이렇게 되돌아가지만 **DB 마이그레이션은 되돌아가지 않는다.** 스키마가 이미
+바뀐 상태라면 이전 버전이 뜨지 않을 수 있다(Hibernate 가 `validate` 로 검증한다).
+그 경우 3.7절의 백업으로 DB 를 함께 복구한다.
 
 ---
 
-## 4. 구조
+## 4. 환경 차이
 
-```text
-Beetle/
- ┣ BEETLE_PRD.md               기획 및 요구사항 정의서
- ┣ docker-compose.yml          MySQL + 백엔드 + 프론트엔드 공통 구성
- ┣ docker-compose.override.yml 로컬(dev) 구성 — 자동 적용
- ┣ docker-compose.prod.yml     배포(prod) 구성 — -f 로 명시
- ┣ backend/                    Spring Boot 4 + Kotlin (클린 아키텍처 + DDD)
- ┗ frontend/                   React + Vite + TypeScript (Tailwind, TanStack Query, Zustand)
-```
-
-백엔드는 `domain` → `application` → `infrastructure`/`presentation` 4계층이며,
-도메인은 프레임워크에 의존하지 않는다. 자세한 규칙은
-[backend/CLAUDE.md](backend/CLAUDE.md) 를 참고한다.
-
-프론트엔드는 기능별 모듈(`features/`) 구조이며, 서버 상태는 TanStack Query,
-UI 상태는 Zustand 로 분리한다. 청구일 산출 같은 도메인 계산은 프론트에서 다시
-구현하지 않고 서버가 계산한 값을 표시한다. 자세한 규칙은
-[frontend/CLAUDE.md](frontend/CLAUDE.md) 를 참고한다.
-
-### 화면
-| 화면 | 내용 |
-|---|---|
-| 대시보드 | 이번 달 수입/지출/수지(**전월 대비 병기**), 다음 달 청구 예정액, **평소보다 많이 쓴 항목**, **예산 대비**, 고정비·변동비 도넛, **큰 지출 Top 5**, 최근 거래 |
-| 거래 내역 | 카테고리·결제 수단 필터, **메모 검색**, 건수·합계, 소비일과 청구일을 나란히 보여주는 표, 출금 완료 토글 |
-| 거래 등록 | 모든 화면 상단의 `거래 등록` 버튼. 청구일은 서버가 산출하고 결과를 바로 보여준다 |
-| 통계·분석 | **전월/작년 같은 달 대비**, **언제 쓰는가**(요일별 평균 + 일별 누적), **매달 나가는 돈**(반복 지출·연간 환산), 최근 6개월 추이(수입·지출 막대 + 수지 선), 카테고리·카드별 점유율, 할부 현황 |
-| 설정 | 카테고리(고정비/변동비) 목록, 결제 수단 목록·등록, **월 예산 등록·수정·삭제** |
-| 결제 수단 등록 | 설정 화면의 `등록` 버튼. 신용카드는 결제일·마감일을 입력한다 |
-
-모든 화면 상단의 **소비일 기준 / 청구일 기준** 토글로 두 집계 축을 전환한다.
-
-통계의 점유율·증감 항목과 대시보드의 큰 지출 항목은 **거래 목록으로 가는 링크**다.
-"쇼핑 113만원"을 누르면 그 금액을 만든 거래 4건이 나온다 — 숫자에서 원인으로
-내려가는 이 경로가 복기의 핵심이다.
-
-복기의 시작점을 사용자가 찾지 않아도 되게 **평소보다 많이 쓴 항목**을 대시보드가
-먼저 알려준다. 최근 3개월 평균보다 30% 이상, 30,000원 이상 늘어난 카테고리만
-고른다. 두 조건을 모두 요구하는 이유는 3,000원 → 6,000원(+100%)까지 알릴 필요가
-없기 때문이다. 카테고리로 묶이지 않는 축("회식", "정기결제")은 **메모 검색**으로 모은다.
-
-비교 기준은 셋이다. **전월 대비**는 과거와, **예산**은 스스로 정한 계획과 비교한다.
-지난달보다 줄었어도 계획보다 많이 썼을 수 있다. 예산은 80%를 넘으면 주의로 표시하는데,
-100%를 넘은 뒤 알리면 조정할 여지가 없기 때문이다. **매달 나가는 돈**은 같은 금액이
-3개월 이상 반복된 항목을 모아 연간 환산액을 보여준다. 월 9,900원은 눈에 띄지 않지만
-연 118,800원이면 결정이 달라진다. **언제 쓰는가**는 요일별 하루 평균과 일별 누적으로
-"주말에 몰린다" 같은 습관을 드러낸다. 요일은 합계가 아니라 평균으로 비교한다 —
-한 달에 어떤 요일은 다섯 번, 어떤 요일은 네 번 오기 때문이다.
-
----
-
-## 5. 주요 API
-
-| 메서드 | 경로 | 설명 |
+| 항목 | 로컬(dev) | 원격 배포(prod) |
 |---|---|---|
-| `POST` | `/api/categories` | 카테고리 등록 |
-| `POST` | `/api/payment-methods` | 결제 수단 등록 (신용카드는 결제일 필수) |
-| `POST` | `/api/transactions` | 거래 등록 (청구일 자동 산출) |
-| `GET` | `/api/transactions?basis=&from=&to=` | 기간 조회 (기준일 축 전환, `keyword` 메모 검색) |
-| `POST` | `/api/transactions/{id}/settlement` | 출금 완료 표시 |
-| `POST` | `/api/installment-plans` | 할부 등록 (회차 거래 자동 생성) |
-| `DELETE` | `/api/installment-plans/{id}` | 중도 해지 (미정산 회차만 정리) |
-| `GET` | `/api/statistics/summary` | 기간 요약 (수입/지출/수지) |
-| `GET` | `/api/statistics/categories` | 카테고리별 점유율 |
-| `GET` | `/api/statistics/payment-methods` | 카드별 지출 점유율 |
-| `GET` | `/api/statistics/expense-nature` | 고정비/변동비 비중 |
-| `GET` | `/api/statistics/upcoming-bills?month=` | 청구 예정액 |
-| `GET` | `/api/statistics/monthly-trend` | 월별 추이 |
-| `GET` | `/api/statistics/month-comparison?month=&baseline=` | 전월/전년 동월 대비 증감 |
-| `GET` | `/api/statistics/category-anomalies?month=` | 이상 지출 감지 |
-| `GET` | `/api/statistics/recurring-expenses?month=` | 반복 지출 점검 (연간 환산 포함) |
-| `GET` | `/api/statistics/spending-pattern?from=&to=` | 요일별·일별 소비 패턴 |
-| `POST` / `GET` | `/api/budgets?month=` | 예산 등록 / 대상 월의 목록 |
-| `GET` | `/api/budgets/performance?month=` | 예산 대비 실적 |
+| 백엔드 설정 | `application-dev.yml` (프로필 미지정 시 기본) | `application-prod.yml` (`SPRING_PROFILES_ACTIVE=prod`) |
+| 프론트엔드 설정 | `.env.development` | `.env.production` |
+| 컨테이너 구성 | `docker-compose.override.yml` (자동 적용) | `docker-compose.prod.yml` (`-f` 로 명시) |
+| DB 접속 정보 | 기본값 있음 (`localhost:13306`) | **없으면 기동 실패** |
+| 시드 데이터 | 적용 | 미적용 (빈 상태로 시작) |
+| Flyway `baseline-on-migrate` | 허용 | 금지 |
+| API 문서 | 노출 | 404 |
+| 관리 엔드포인트 | health·info·metrics·env·beans·mappings | **health 만** |
+| 오류 응답 | 예외 메시지 포함 | `code`/`message` 만 |
+| SQL 로그 | 출력 | 미출력 |
+| 노출 포트 | 프론트(5173)·백엔드(8080)·MySQL(13306) | **프론트엔드만** (기본 80) |
+| 프론트엔드 소스맵 | 포함 | 미포함 |
+| 화면 배지 | `LOCAL` 표시 | 없음 |
 
-전체 스펙은 `/swagger-ui.html` 에서 확인한다.
-
-기본 카테고리 13종과 결제 수단 `현금` 은 시드 데이터로 미리 등록된다.
-신용카드는 결제일·마감일이 개인마다 달라 임의로 심지 않으므로,
-설정 화면에서 직접 등록한다.
+이 차이는 문서가 아니라 **테스트로 강제한다.** `ProfileConfigurationTest` 가 설정 파일을
+직접 읽어 위 정책을 검증하므로, 설정을 고치다 규칙을 깨면 `./gradlew check` 가 실패한다.
