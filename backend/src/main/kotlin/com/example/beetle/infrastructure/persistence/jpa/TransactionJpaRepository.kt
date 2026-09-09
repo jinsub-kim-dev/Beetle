@@ -19,6 +19,7 @@ interface TransactionJpaRepository : JpaRepository<TransactionJpaEntity, Long> {
         WHERE t.spentDate BETWEEN :from AND :to
           AND (:categoryId IS NULL OR t.categoryId = :categoryId)
           AND (:paymentMethodId IS NULL OR t.paymentMethodId = :paymentMethodId)
+          AND (:keyword IS NULL OR t.memo LIKE :keyword ESCAPE '!')
         ORDER BY t.spentDate DESC, t.id DESC
         """,
     )
@@ -27,6 +28,7 @@ interface TransactionJpaRepository : JpaRepository<TransactionJpaEntity, Long> {
         @Param("to") to: LocalDate,
         @Param("categoryId") categoryId: Long?,
         @Param("paymentMethodId") paymentMethodId: Long?,
+        @Param("keyword") keyword: String?,
     ): List<TransactionJpaEntity>
 
     /** 청구일 기준 기간 조회. 현금 흐름 통제에 사용한다. */
@@ -36,6 +38,7 @@ interface TransactionJpaRepository : JpaRepository<TransactionJpaEntity, Long> {
         WHERE t.billDate BETWEEN :from AND :to
           AND (:categoryId IS NULL OR t.categoryId = :categoryId)
           AND (:paymentMethodId IS NULL OR t.paymentMethodId = :paymentMethodId)
+          AND (:keyword IS NULL OR t.memo LIKE :keyword ESCAPE '!')
         ORDER BY t.billDate DESC, t.id DESC
         """,
     )
@@ -44,6 +47,7 @@ interface TransactionJpaRepository : JpaRepository<TransactionJpaEntity, Long> {
         @Param("to") to: LocalDate,
         @Param("categoryId") categoryId: Long?,
         @Param("paymentMethodId") paymentMethodId: Long?,
+        @Param("keyword") keyword: String?,
     ): List<TransactionJpaEntity>
 
     fun findAllByInstallmentPlanIdOrderByInstallmentSequenceAsc(

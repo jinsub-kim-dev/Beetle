@@ -352,6 +352,32 @@ class TransactionControllerTest {
         }
 
         @Test
+        fun `메모 검색어가 조회 조건으로 전달된다`() {
+            // given
+            every { transactionUseCase.search(any()) } returns emptyList()
+
+            // when
+            mockMvc.perform(
+                get("/api/transactions")
+                    .param("from", "2026-01-01")
+                    .param("to", "2026-01-31")
+                    .param("keyword", "스타벅스"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify {
+                transactionUseCase.search(
+                    TransactionSearchQuery(
+                        basis = DateBasis.SPENT,
+                        from = LocalDate.of(2026, 1, 1),
+                        to = LocalDate.of(2026, 1, 31),
+                        keyword = "스타벅스",
+                    ),
+                )
+            }
+        }
+
+        @Test
         fun `기간 파라미터가 없으면 400 을 반환한다`() {
             mockMvc.perform(get("/api/transactions"))
                 .andExpect(status().isBadRequest)

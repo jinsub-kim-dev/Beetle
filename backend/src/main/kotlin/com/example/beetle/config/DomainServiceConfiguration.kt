@@ -2,6 +2,7 @@ package com.example.beetle.config
 
 import com.example.beetle.domain.service.BillDateCalculator
 import com.example.beetle.domain.service.InstallmentScheduler
+import com.example.beetle.domain.service.SpendingAnomalyDetector
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -20,4 +21,7 @@ class DomainServiceConfiguration {
     @Bean
     fun installmentScheduler(billDateCalculator: BillDateCalculator): InstallmentScheduler =
         InstallmentScheduler(billDateCalculator)
+
+    @Bean
+    fun spendingAnomalyDetector(): SpendingAnomalyDetector = SpendingAnomalyDetector()
 }

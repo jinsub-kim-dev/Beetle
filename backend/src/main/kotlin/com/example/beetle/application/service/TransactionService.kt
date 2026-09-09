@@ -119,6 +119,7 @@ class TransactionService(
             to = query.to,
             categoryId = query.categoryId,
             paymentMethodId = query.paymentMethodId,
+            keyword = query.keyword,
         )
     }
 

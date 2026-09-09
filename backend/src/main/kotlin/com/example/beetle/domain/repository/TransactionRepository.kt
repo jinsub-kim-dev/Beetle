@@ -25,6 +25,8 @@ interface TransactionRepository {
      *
      * @param basis 기간 필터에 사용할 기준일. 소비 패턴 분석은 [DateBasis.SPENT],
      *   현금 흐름 통제는 [DateBasis.BILL] 을 사용한다.
+     * @param keyword 메모 부분 일치 검색어. "스타벅스에 얼마 썼지" 같은 질문에 답한다.
+     *   공백이거나 `null` 이면 조건에서 제외한다.
      */
     fun findAllByPeriod(
         basis: DateBasis,
@@ -32,6 +34,7 @@ interface TransactionRepository {
         to: LocalDate,
         categoryId: CategoryId? = null,
         paymentMethodId: PaymentMethodId? = null,
+        keyword: String? = null,
     ): List<Transaction>
 
     fun findAllByInstallmentPlanId(planId: InstallmentPlanId): List<Transaction>

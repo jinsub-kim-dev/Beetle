@@ -102,4 +102,66 @@ describe('TransactionFilterBar - 거래 목록 필터', () => {
     expect(screen.getByLabelText('카테고리')).toHaveValue('')
     expect(screen.getByLabelText('결제 수단')).toHaveValue('2')
   })
+
+  describe('메모 검색', () => {
+    it('URL 의 검색어를 입력창에 반영한다', async () => {
+      await 필터바렌더링('/transactions?keyword=회식')
+
+      expect(screen.getByLabelText('메모 검색')).toHaveValue('회식')
+    })
+
+    it('입력만으로는 조건이 걸리지 않고 제출해야 적용된다', async () => {
+      // 타이핑 중 매 글자마다 조회가 나가지 않도록 제출 시점에만 주소에 반영한다
+      await 필터바렌더링()
+
+      await userEvent.type(screen.getByLabelText('메모 검색'), '회식')
+      expect(screen.queryByRole('button', { name: '필터 해제' })).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: '검색' }))
+
+      expect(await screen.findByRole('button', { name: '필터 해제' })).toBeInTheDocument()
+    })
+
+    it('엔터로도 제출된다', async () => {
+      await 필터바렌더링()
+
+      await userEvent.type(screen.getByLabelText('메모 검색'), '회식{Enter}')
+
+      expect(await screen.findByRole('button', { name: '필터 해제' })).toBeInTheDocument()
+    })
+
+    it('검색어를 지우고 제출하면 조건이 해제된다', async () => {
+      await 필터바렌더링('/transactions?keyword=회식')
+
+      await userEvent.clear(screen.getByLabelText('메모 검색'))
+      await userEvent.click(screen.getByRole('button', { name: '검색' }))
+
+      expect(screen.queryByRole('button', { name: '필터 해제' })).not.toBeInTheDocument()
+    })
+
+    it('공백만 입력하면 조건으로 보지 않는다', async () => {
+      await 필터바렌더링()
+
+      await userEvent.type(screen.getByLabelText('메모 검색'), '   {Enter}')
+
+      expect(screen.queryByRole('button', { name: '필터 해제' })).not.toBeInTheDocument()
+    })
+
+    it('검색어를 적용해도 카테고리 조건이 유지된다', async () => {
+      await 필터바렌더링('/transactions?categoryId=8')
+
+      await userEvent.type(screen.getByLabelText('메모 검색'), '회식{Enter}')
+
+      expect(screen.getByLabelText('카테고리')).toHaveValue('8')
+      expect(screen.getByLabelText('메모 검색')).toHaveValue('회식')
+    })
+
+    it('필터를 해제하면 입력창도 비워진다', async () => {
+      await 필터바렌더링('/transactions?keyword=회식')
+
+      await userEvent.click(screen.getByRole('button', { name: '필터 해제' }))
+
+      expect(screen.getByLabelText('메모 검색')).toHaveValue('')
+    })
+  })
 })

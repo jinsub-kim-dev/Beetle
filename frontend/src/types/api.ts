@@ -3,6 +3,7 @@
  */
 import type {
   CategoryType,
+  ComparisonBaseline,
   DateBasis,
   ExpenseNature,
   IsoDate,
@@ -98,6 +99,8 @@ export interface TransactionSearchParams {
   to: IsoDate
   categoryId?: number
   paymentMethodId?: number
+  /** 메모 부분 일치 검색어. 공백이면 서버가 조건에서 제외한다. */
+  keyword?: string
 }
 
 // --- 할부 계획 ---
@@ -194,3 +197,68 @@ export interface MonthlySummary {
   expense: number
   balance: number
 }
+
+// --- 비교와 이상치 ---
+
+/**
+ * 두 시점 금액 비교.
+ *
+ * `changePercentage` 는 **기준이 0원이면 응답에 없다.** 0에서 늘어난 변화의 비율은
+ * 정의할 수 없으므로, 이 경우 증감액만으로 표시해야 한다.
+ */
+export interface AmountComparison {
+  current: number
+  baseline: number
+  change: number
+  changePercentage?: number
+}
+
+export interface CategoryComparisonItem {
+  categoryId: number
+  categoryName: string
+  nature?: ExpenseNature
+  current: number
+  baseline: number
+  change: number
+  changePercentage?: number
+}
+
+/** 월 비교. 수지는 부호가 바뀌면 비율이 의미를 잃으므로 증감액만 제공된다. */
+export interface MonthComparison {
+  basis: DateBasis
+  month: YearMonthString
+  baselineMonth: YearMonthString
+  income: AmountComparison
+  expense: AmountComparison
+  currentBalance: number
+  baselineBalance: number
+  balanceChange: number
+  /** 지출 카테고리별 비교. 증가액 내림차순. 한쪽 달에만 있는 항목도 포함된다. */
+  categories: CategoryComparisonItem[]
+}
+
+export interface CategoryAnomalyItem {
+  categoryId: number
+  categoryName: string
+  nature: ExpenseNature
+  current: number
+  /** 직전 기준 창의 월평균. 기록이 없는 달도 0원으로 포함해 계산된다. */
+  baselineAverage: number
+  change: number
+  /** 기준 평균이 0원(이번 달 새로 생긴 지출)이면 없다. */
+  changePercentage?: number
+}
+
+/** 이상치 판정 결과. 판정 기준을 함께 담아 화면에서 설명할 수 있게 한다. */
+export interface CategoryAnomalyReport {
+  basis: DateBasis
+  month: YearMonthString
+  baselineMonths: number
+  criteria: {
+    minimumIncreasePercentage: number
+    minimumIncreaseAmount: number
+  }
+  anomalies: CategoryAnomalyItem[]
+}
+
+export type { ComparisonBaseline }

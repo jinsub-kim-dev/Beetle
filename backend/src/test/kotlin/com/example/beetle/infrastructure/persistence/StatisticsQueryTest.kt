@@ -457,6 +457,138 @@ class StatisticsQueryTest : AbstractPersistenceTest() {
     }
 
     @Nested
+    @DisplayName("카테고리별 월별 지출 - 이상치 판정 입력")
+    inner class MonthlyCategoryExpenses {
+
+        @Test
+        fun `카테고리와 월 단위로 나누어 합산한다`() {
+            // given
+            거래(식비, 100_000L, LocalDate.of(2026, 1, 10))
+            거래(식비, 50_000L, LocalDate.of(2026, 1, 20))
+            거래(식비, 300_000L, LocalDate.of(2026, 2, 10))
+            거래(월세, 700_000L, LocalDate.of(2026, 1, 5))
+            flushAndClear()
+
+            // when
+            val result = statisticsQuery.monthlyCategoryExpenses(
+                DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 2),
+            )
+
+            // then
+            assertThat(result).hasSize(3)
+            val 식비1월 = result.single {
+                it.categoryName == "식비" && it.yearMonth == YearMonth.of(2026, 1)
+            }
+            assertThat(식비1월.total).isEqualTo(Money.of(150_000))
+            assertThat(
+                result.single { it.categoryName == "식비" && it.yearMonth == YearMonth.of(2026, 2) }
+                    .total,
+            ).isEqualTo(Money.of(300_000))
+        }
+
+        @Test
+        fun `지출 성격을 함께 담는다`() {
+            // given
+            거래(월세, 700_000L, LocalDate.of(2026, 1, 5))
+            flushAndClear()
+
+            // when & then
+            assertThat(
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 1),
+                ).single().nature,
+            ).isEqualTo(ExpenseNature.FIXED)
+        }
+
+        @Test
+        fun `수입과 이체는 집계하지 않는다`() {
+            // given
+            거래(급여, 3_000_000L, LocalDate.of(2026, 1, 25))
+            거래(계좌이체, 500_000L, LocalDate.of(2026, 1, 20))
+            거래(식비, 10_000L, LocalDate.of(2026, 1, 10))
+            flushAndClear()
+
+            // when & then
+            assertThat(
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 1),
+                ),
+            ).singleElement()
+                .extracting<String> { it.categoryName }
+                .isEqualTo("식비")
+        }
+
+        @Test
+        fun `통계 제외 거래는 집계하지 않는다`() {
+            // given
+            거래(통신비, 50_000L, LocalDate.of(2026, 1, 15), isExcludedFromStats = true)
+            flushAndClear()
+
+            // when & then
+            assertThat(
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 1),
+                ),
+            ).isEmpty()
+        }
+
+        @Test
+        fun `거래가 없는 월은 결과에 포함되지 않는다`() {
+            // given: 판정 규칙이 "기록 없는 달은 0원" 을 적용하므로 여기서 채우지 않는다
+            거래(식비, 100_000L, LocalDate.of(2026, 1, 10))
+            flushAndClear()
+
+            // when
+            val result = statisticsQuery.monthlyCategoryExpenses(
+                DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 3),
+            )
+
+            // then
+            assertThat(result).hasSize(1)
+            assertThat(result.single().yearMonth).isEqualTo(YearMonth.of(2026, 1))
+        }
+
+        @Test
+        fun `기준일 축에 따라 월 구분이 달라진다`() {
+            // given: 1월 소비 -> 2월 청구
+            거래(
+                식비, 450_000L,
+                spentDate = LocalDate.of(2026, 1, 10), billDate = LocalDate.of(2026, 2, 14),
+            )
+            flushAndClear()
+
+            // when
+            val 소비일 = statisticsQuery.monthlyCategoryExpenses(
+                DateBasis.SPENT, YearMonth.of(2026, 1), YearMonth.of(2026, 2),
+            )
+            val 청구일 = statisticsQuery.monthlyCategoryExpenses(
+                DateBasis.BILL, YearMonth.of(2026, 1), YearMonth.of(2026, 2),
+            )
+
+            // then
+            assertThat(소비일.single().yearMonth).isEqualTo(YearMonth.of(2026, 1))
+            assertThat(청구일.single().yearMonth).isEqualTo(YearMonth.of(2026, 2))
+        }
+
+        @Test
+        fun `해를 넘기는 창도 올바르게 나눈다`() {
+            // given
+            거래(식비, 100_000L, LocalDate.of(2026, 12, 10))
+            거래(식비, 200_000L, LocalDate.of(2027, 1, 10))
+            flushAndClear()
+
+            // when
+            val result = statisticsQuery.monthlyCategoryExpenses(
+                DateBasis.SPENT, YearMonth.of(2026, 12), YearMonth.of(2027, 1),
+            )
+
+            // then
+            assertThat(result.map { it.yearMonth })
+                .containsExactlyInAnyOrder(YearMonth.of(2026, 12), YearMonth.of(2027, 1))
+        }
+    }
+
+    @Nested
     @DisplayName("월별 추이")
     inner class MonthlyTrend {
 

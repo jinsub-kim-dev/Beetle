@@ -7,21 +7,30 @@ import com.example.beetle.application.port.ExpenseNatureShareItem
 import com.example.beetle.application.port.PaymentMethodBreakdown
 import com.example.beetle.application.port.PaymentMethodShareItem
 import com.example.beetle.application.port.StatisticsUseCase
+import com.example.beetle.application.port.CategoryAnomalyReport
+import com.example.beetle.application.port.CategoryComparison
+import com.example.beetle.application.port.MonthComparison
 import com.example.beetle.application.port.UpcomingBills
 import com.example.beetle.domain.exception.InvariantViolationException
+import com.example.beetle.domain.model.AmountChange
 import com.example.beetle.domain.model.CategoryId
+import com.example.beetle.domain.model.ChangeRate
 import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.PaymentMethodType
+import com.example.beetle.domain.model.Balance
+import com.example.beetle.domain.model.Comparison
+import com.example.beetle.domain.model.ComparisonBaseline
 import com.example.beetle.domain.model.Ratio
 import com.example.beetle.domain.query.CategoryAggregate
 import com.example.beetle.domain.query.ExpenseNatureAggregate
 import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PaymentMethodAggregate
 import com.example.beetle.domain.query.PeriodSummary
+import com.example.beetle.domain.service.SpendingAnomaly
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -391,6 +400,249 @@ class StatisticsControllerTest {
                 .andExpect(status().isBadRequest)
                 .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"))
         }
+    }
+
+    @Nested
+    @DisplayName("GET /api/statistics/month-comparison")
+    inner class MonthComparisonApi {
+
+        @Test
+        fun `전월 대비 증감을 반환한다`() {
+            // given
+            every { statisticsUseCase.monthComparison(any(), any(), any()) } returns MonthComparison(
+                basis = DateBasis.SPENT,
+                month = YearMonth.of(2026, 9),
+                baselineMonth = YearMonth.of(2026, 8),
+                income = Comparison(Money.of(3_350_000), Money.of(3_200_000)),
+                expense = Comparison(Money.of(2_120_000), Money.of(1_300_000)),
+                currentBalance = Balance(1_230_000),
+                baselineBalance = Balance(1_900_000),
+                categories = listOf(
+                    CategoryComparison(
+                        categoryId = CategoryId(10L),
+                        categoryName = "쇼핑",
+                        nature = ExpenseNature.VARIABLE,
+                        comparison = Comparison(Money.of(1_128_000), Money.of(128_000)),
+                    ),
+                ),
+            )
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/month-comparison").param("month", "2026-09"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.month").value("2026-09"))
+                .andExpect(jsonPath("$.baselineMonth").value("2026-08"))
+                .andExpect(jsonPath("$.expense.current").value(2120000))
+                .andExpect(jsonPath("$.expense.baseline").value(1300000))
+                .andExpect(jsonPath("$.expense.change").value(820000))
+                .andExpect(jsonPath("$.expense.changePercentage").value(63.07))
+                .andExpect(jsonPath("$.balanceChange").value(-670000))
+                .andExpect(jsonPath("$.categories[0].categoryName").value("쇼핑"))
+                .andExpect(jsonPath("$.categories[0].change").value(1000000))
+        }
+
+        @Test
+        fun `기본 비교 기준은 전월이다`() {
+            // given
+            every { statisticsUseCase.monthComparison(any(), any(), any()) } returns 빈비교()
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/month-comparison").param("month", "2026-09"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify {
+                statisticsUseCase.monthComparison(
+                    DateBasis.SPENT, YearMonth.of(2026, 9), ComparisonBaseline.PREVIOUS_MONTH,
+                )
+            }
+        }
+
+        @Test
+        fun `전년 동월 기준을 지정할 수 있다`() {
+            // given
+            every { statisticsUseCase.monthComparison(any(), any(), any()) } returns 빈비교()
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/month-comparison")
+                    .param("month", "2026-09")
+                    .param("baseline", "SAME_MONTH_LAST_YEAR"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify {
+                statisticsUseCase.monthComparison(
+                    DateBasis.SPENT,
+                    YearMonth.of(2026, 9),
+                    ComparisonBaseline.SAME_MONTH_LAST_YEAR,
+                )
+            }
+        }
+
+        @Test
+        fun `기준이 0원이면 증감률을 null 로 응답한다`() {
+            // given: 0에서 늘어난 변화의 비율은 정의할 수 없다
+            every { statisticsUseCase.monthComparison(any(), any(), any()) } returns MonthComparison(
+                basis = DateBasis.SPENT,
+                month = YearMonth.of(2026, 9),
+                baselineMonth = YearMonth.of(2026, 8),
+                income = Comparison.ZERO,
+                expense = Comparison(Money.of(500_000), Money.ZERO),
+                currentBalance = Balance(-500_000),
+                baselineBalance = Balance.ZERO,
+                categories = emptyList(),
+            )
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/month-comparison").param("month", "2026-09"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.expense.change").value(500000))
+                // non_null 직렬화 정책에 따라 null 필드는 응답에서 생략된다
+                .andExpect(jsonPath("$.expense.changePercentage").doesNotExist())
+        }
+
+        @Test
+        fun `month 파라미터가 없으면 400 을 반환한다`() {
+            mockMvc.perform(get("/api/statistics/month-comparison"))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("MISSING_PARAMETER"))
+        }
+
+        @Test
+        fun `알 수 없는 비교 기준은 400 을 반환한다`() {
+            mockMvc.perform(
+                get("/api/statistics/month-comparison")
+                    .param("month", "2026-09")
+                    .param("baseline", "LAST_WEEK"),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVALID_PARAMETER"))
+        }
+
+        private fun 빈비교() = MonthComparison(
+            basis = DateBasis.SPENT,
+            month = YearMonth.of(2026, 9),
+            baselineMonth = YearMonth.of(2026, 8),
+            income = Comparison.ZERO,
+            expense = Comparison.ZERO,
+            currentBalance = Balance.ZERO,
+            baselineBalance = Balance.ZERO,
+            categories = emptyList(),
+        )
+    }
+
+    @Nested
+    @DisplayName("GET /api/statistics/category-anomalies")
+    inner class CategoryAnomaliesApi {
+
+        @Test
+        fun `급증 항목과 판정 기준을 함께 반환한다`() {
+            // given
+            every { statisticsUseCase.categoryAnomalies(any(), any(), any()) } returns
+                CategoryAnomalyReport(
+                    basis = DateBasis.SPENT,
+                    month = YearMonth.of(2026, 9),
+                    baselineMonths = 3,
+                    anomalies = listOf(
+                        SpendingAnomaly(
+                            categoryId = CategoryId(8L),
+                            categoryName = "식비",
+                            nature = ExpenseNature.VARIABLE,
+                            current = Money.of(600_000),
+                            baselineAverage = Money.of(300_000),
+                            change = AmountChange.between(Money.of(600_000), Money.of(300_000)),
+                            changeRate = ChangeRate.between(Money.of(600_000), Money.of(300_000)),
+                        ),
+                    ),
+                )
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/category-anomalies").param("month", "2026-09"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.month").value("2026-09"))
+                .andExpect(jsonPath("$.baselineMonths").value(3))
+                // 화면이 판정 기준을 설명할 수 있어야 결과를 신뢰할 수 있다
+                .andExpect(jsonPath("$.criteria.minimumIncreasePercentage").value(30.0))
+                .andExpect(jsonPath("$.criteria.minimumIncreaseAmount").value(30000))
+                .andExpect(jsonPath("$.anomalies[0].categoryName").value("식비"))
+                .andExpect(jsonPath("$.anomalies[0].baselineAverage").value(300000))
+                .andExpect(jsonPath("$.anomalies[0].change").value(300000))
+                .andExpect(jsonPath("$.anomalies[0].changePercentage").value(100.0))
+        }
+
+        @Test
+        fun `기본 비교 창은 3개월이다`() {
+            // given
+            every { statisticsUseCase.categoryAnomalies(any(), any(), any()) } returns 빈리포트()
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/category-anomalies").param("month", "2026-09"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify { statisticsUseCase.categoryAnomalies(DateBasis.SPENT, YearMonth.of(2026, 9), 3) }
+        }
+
+        @Test
+        fun `비교 창을 지정할 수 있다`() {
+            // given
+            every { statisticsUseCase.categoryAnomalies(any(), any(), any()) } returns 빈리포트()
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/category-anomalies")
+                    .param("month", "2026-09")
+                    .param("baselineMonths", "6"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify { statisticsUseCase.categoryAnomalies(DateBasis.SPENT, YearMonth.of(2026, 9), 6) }
+        }
+
+        @Test
+        fun `허용 범위를 넘는 비교 창은 400 을 반환한다`() {
+            // given
+            every { statisticsUseCase.categoryAnomalies(any(), any(), any()) } throws
+                InvariantViolationException("비교 기준 개월 수는 1 이상 12 이하여야 합니다.")
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/category-anomalies")
+                    .param("month", "2026-09")
+                    .param("baselineMonths", "99"),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVARIANT_VIOLATION"))
+        }
+
+        @Test
+        fun `급증 항목이 없으면 빈 목록을 반환한다`() {
+            // given
+            every { statisticsUseCase.categoryAnomalies(any(), any(), any()) } returns 빈리포트()
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/category-anomalies").param("month", "2026-09"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.anomalies.length()").value(0))
+        }
+
+        private fun 빈리포트() = CategoryAnomalyReport(
+            basis = DateBasis.SPENT,
+            month = YearMonth.of(2026, 9),
+            baselineMonths = 3,
+            anomalies = emptyList(),
+        )
     }
 
     @Nested

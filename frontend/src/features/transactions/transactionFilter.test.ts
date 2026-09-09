@@ -49,6 +49,46 @@ describe('transactionFilter - 거래 목록 필터', () => {
     })
   })
 
+  describe('검색어', () => {
+    it('검색어를 읽는다', () => {
+      expect(parseTransactionFilter(params('keyword=스타벅스'))).toEqual({ keyword: '스타벅스' })
+    })
+
+    it('앞뒤 공백을 제거한다', () => {
+      expect(parseTransactionFilter(params('keyword=%20%20스타벅스%20%20'))).toEqual({
+        keyword: '스타벅스',
+      })
+    })
+
+    it.each(['', '%20', '%20%20'])('공백만 있으면 조건으로 보지 않는다: "%s"', (raw) => {
+      expect(parseTransactionFilter(params(`keyword=${raw}`))).toEqual({})
+    })
+
+    it('다른 조건과 함께 담는다', () => {
+      expect(parseTransactionFilter(params('categoryId=8&keyword=이마트'))).toEqual({
+        categoryId: 8,
+        keyword: '이마트',
+      })
+    })
+
+    it('LIKE 와일드카드도 그대로 전달한다', () => {
+      // 이스케이프는 서버(어댑터)가 담당한다. 클라이언트는 입력을 그대로 넘긴다.
+      expect(parseTransactionFilter(params('keyword=50%25'))).toEqual({ keyword: '50%' })
+    })
+
+    it('검색어만 있어도 빈 필터가 아니다', () => {
+      expect(isEmptyFilter({ keyword: '스타벅스' })).toBe(false)
+      expect(isEmptyFilter({ keyword: '   ' })).toBe(true)
+    })
+
+    it('경로에 검색어를 담고 다시 파싱하면 같은 값이 나온다', () => {
+      const filter = { categoryId: 8, keyword: '스타벅스 강남점' }
+      const path = buildTransactionsPath(filter)
+
+      expect(parseTransactionFilter(new URLSearchParams(path.split('?')[1]))).toEqual(filter)
+    })
+  })
+
   describe('toFilterSearchParams', () => {
     it('값이 있는 항목만 문자열로 담는다', () => {
       expect(toFilterSearchParams({ categoryId: 8, paymentMethodId: 2 })).toEqual({
@@ -59,6 +99,10 @@ describe('transactionFilter - 거래 목록 필터', () => {
 
     it('빈 필터는 빈 객체다', () => {
       expect(toFilterSearchParams({})).toEqual({})
+    })
+
+    it('공백뿐인 검색어는 담지 않는다', () => {
+      expect(toFilterSearchParams({ keyword: '   ' })).toEqual({})
     })
 
     it('한쪽만 있으면 그 키만 넣는다', () => {

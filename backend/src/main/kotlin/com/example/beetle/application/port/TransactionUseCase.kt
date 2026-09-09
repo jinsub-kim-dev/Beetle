@@ -80,4 +80,6 @@ data class TransactionSearchQuery(
     val to: LocalDate,
     val categoryId: CategoryId? = null,
     val paymentMethodId: PaymentMethodId? = null,
+    /** 메모 부분 일치 검색어. 공백이면 조건에서 제외된다. */
+    val keyword: String? = null,
 )

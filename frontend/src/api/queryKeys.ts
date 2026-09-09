@@ -1,4 +1,10 @@
-import type { CategoryType, DateBasis, IsoDate, YearMonthString } from '@/types/domain'
+import type {
+  CategoryType,
+  ComparisonBaseline,
+  DateBasis,
+  IsoDate,
+  YearMonthString,
+} from '@/types/domain'
 import type { PeriodParams, TransactionSearchParams } from '@/types/api'
 
 /**
@@ -42,6 +48,10 @@ export const queryKeys = {
     upcomingBills: (month: YearMonthString) => ['statistics', 'upcomingBills', month] as const,
     monthlyTrend: (basis: DateBasis, from: YearMonthString, to: YearMonthString) =>
       ['statistics', 'monthlyTrend', basis, from, to] as const,
+    monthComparison: (basis: DateBasis, month: YearMonthString, baseline: ComparisonBaseline) =>
+      ['statistics', 'monthComparison', basis, month, baseline] as const,
+    categoryAnomalies: (basis: DateBasis, month: YearMonthString, baselineMonths?: number) =>
+      ['statistics', 'categoryAnomalies', basis, month, baselineMonths ?? 'DEFAULT'] as const,
   },
 } as const
 

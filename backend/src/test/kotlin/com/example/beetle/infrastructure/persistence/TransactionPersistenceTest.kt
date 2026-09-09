@@ -327,6 +327,107 @@ class TransactionPersistenceTest : AbstractPersistenceTest() {
     }
 
     @Test
+    fun `메모로 부분 일치 검색한다`() {
+        // given: "스타벅스에 얼마 썼지" 같은 질문에 답하기 위한 검색이다
+        transactionRepository.save(거래(memo = "스타벅스 강남점"))
+        transactionRepository.save(거래(memo = "스타벅스 성수점"))
+        transactionRepository.save(거래(memo = "이마트 성수점"))
+        flushAndClear()
+
+        // when
+        val result = 기간조회(keyword = "스타벅스")
+
+        // then
+        assertThat(result).hasSize(2)
+        assertThat(result).allSatisfy { assertThat(it.memo).contains("스타벅스") }
+    }
+
+    @Test
+    fun `검색어가 메모 중간에 있어도 찾는다`() {
+        // given
+        transactionRepository.save(거래(memo = "이마트 성수점"))
+        flushAndClear()
+
+        // when & then
+        assertThat(기간조회(keyword = "성수")).hasSize(1)
+    }
+
+    @Test
+    fun `메모가 없는 거래는 검색되지 않는다`() {
+        // given
+        transactionRepository.save(거래(memo = null))
+        flushAndClear()
+
+        // when & then
+        assertThat(기간조회(keyword = "스타벅스")).isEmpty()
+    }
+
+    @Test
+    fun `검색어가 비어 있으면 조건에서 제외한다`() {
+        // given
+        transactionRepository.save(거래(memo = "스타벅스"))
+        transactionRepository.save(거래(memo = null))
+        flushAndClear()
+
+        // when & then
+        assertThat(기간조회(keyword = null)).hasSize(2)
+        assertThat(기간조회(keyword = "")).hasSize(2)
+        assertThat(기간조회(keyword = "   ")).hasSize(2)
+    }
+
+    @Test
+    fun `LIKE 와일드카드를 문자 그대로 검색한다`() {
+        // given: 이스케이프하지 않으면 "50%" 검색이 전체를 반환한다
+        transactionRepository.save(거래(memo = "50% 할인"))
+        transactionRepository.save(거래(memo = "정가 결제"))
+        flushAndClear()
+
+        // when
+        val result = 기간조회(keyword = "50%")
+
+        // then
+        assertThat(result).singleElement()
+            .extracting<String> { it.memo }
+            .isEqualTo("50% 할인")
+    }
+
+    @Test
+    fun `밑줄도 문자 그대로 검색한다`() {
+        // given: _ 는 LIKE 에서 임의의 한 글자를 뜻한다
+        transactionRepository.save(거래(memo = "a_b 메모"))
+        transactionRepository.save(거래(memo = "axb 메모"))
+        flushAndClear()
+
+        // when & then
+        assertThat(기간조회(keyword = "a_b")).singleElement()
+            .extracting<String> { it.memo }
+            .isEqualTo("a_b 메모")
+    }
+
+    @Test
+    fun `검색어와 다른 조건을 함께 적용한다`() {
+        // given
+        transactionRepository.save(거래(categoryId = 식비, memo = "스타벅스"))
+        transactionRepository.save(거래(categoryId = 월세, memo = "스타벅스 오피스"))
+        flushAndClear()
+
+        // when & then
+        assertThat(기간조회(keyword = "스타벅스", categoryId = 월세)).hasSize(1)
+    }
+
+    /** 소비일 기준 1월 조회 헬퍼. */
+    private fun 기간조회(
+        keyword: String? = null,
+        categoryId: CategoryId? = null,
+    ) = transactionRepository.findAllByPeriod(
+        basis = DateBasis.SPENT,
+        from = LocalDate.of(2026, 1, 1),
+        to = LocalDate.of(2026, 1, 31),
+        categoryId = categoryId,
+        keyword = keyword,
+    )
+
+    @Test
     fun `카테고리와 결제 수단 사용 여부를 확인한다`() {
         // given
         transactionRepository.save(거래(categoryId = 식비, paymentMethodId = 삼성카드))

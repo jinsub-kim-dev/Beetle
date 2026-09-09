@@ -9,6 +9,7 @@ import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.PaymentMethodType
 import com.example.beetle.domain.query.CategoryAggregate
 import com.example.beetle.domain.query.ExpenseNatureAggregate
+import com.example.beetle.domain.query.MonthlyCategoryExpense
 import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PaymentMethodAggregate
 import com.example.beetle.domain.query.PeriodSummary
@@ -215,6 +216,40 @@ class StatisticsQueryAdapter(
             }
             .toList()
     }
+
+    override fun monthlyCategoryExpenses(
+        basis: DateBasis,
+        from: YearMonth,
+        to: YearMonth,
+    ): List<MonthlyCategoryExpense> = entityManager
+        .createNativeQuery(
+            """
+            SELECT c.id, c.name, c.nature,
+                   YEAR(t.${basis.dateColumn}), MONTH(t.${basis.dateColumn}),
+                   COALESCE(SUM(t.amount), 0)
+            FROM transaction t
+                     JOIN category c ON c.id = t.category_id
+            WHERE t.is_excluded_from_stats = FALSE
+              AND c.type = 'EXPENSE'
+              AND t.${basis.dateColumn} BETWEEN :from AND :to
+            GROUP BY c.id, c.name, c.nature,
+                     YEAR(t.${basis.dateColumn}), MONTH(t.${basis.dateColumn})
+            """.trimIndent(),
+        )
+        .setParameter("from", from.atDay(1))
+        .setParameter("to", to.atEndOfMonth())
+        .resultList
+        .map { it as Array<*> }
+        .map { row ->
+            MonthlyCategoryExpense(
+                categoryId = CategoryId(row[0].toLongValue()),
+                categoryName = row[1] as String,
+                // 지출만 조회하므로 성격은 항상 존재한다 (PRD 2-②).
+                nature = ExpenseNature.valueOf(row[2] as String),
+                yearMonth = YearMonth.of(row[3].toInt(), row[4].toInt()),
+                total = row[5].toMoney(),
+            )
+        }
 
     private fun List<Array<*>>.amountOf(type: CategoryType): Money =
         firstOrNull { it[2] as String == type.name }?.get(3)?.toMoney() ?: Money.ZERO

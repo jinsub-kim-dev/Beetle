@@ -45,17 +45,38 @@ class TransactionRepositoryAdapter(
         to: LocalDate,
         categoryId: CategoryId?,
         paymentMethodId: PaymentMethodId?,
+        keyword: String?,
     ): List<Transaction> {
+        val pattern = likePatternOf(keyword)
         val entities = when (basis) {
             DateBasis.SPENT -> jpaRepository.findAllBySpentDatePeriod(
-                from, to, categoryId?.value, paymentMethodId?.value,
+                from, to, categoryId?.value, paymentMethodId?.value, pattern,
             )
 
             DateBasis.BILL -> jpaRepository.findAllByBillDatePeriod(
-                from, to, categoryId?.value, paymentMethodId?.value,
+                from, to, categoryId?.value, paymentMethodId?.value, pattern,
             )
         }
         return entities.map(TransactionMapper::toDomain)
+    }
+
+    /**
+     * 검색어를 LIKE 패턴으로 바꾼다. 조건이 없으면 `null` 을 반환한다.
+     *
+     * `%` 와 `_` 는 LIKE 의 와일드카드다. 사용자가 입력한 문자를 그대로 넘기면
+     * "50%" 를 검색했을 때 전혀 다른 결과가 나온다. 이스케이프 문자(`!`)로 감싸고,
+     * 이스케이프 문자 자신도 먼저 처리한다.
+     */
+    private fun likePatternOf(keyword: String?): String? {
+        val trimmed = keyword?.trim()
+        if (trimmed.isNullOrEmpty()) return null
+
+        val escaped = trimmed
+            .replace("!", "!!")
+            .replace("%", "!%")
+            .replace("_", "!_")
+
+        return "%$escaped%"
     }
 
     override fun findAllByInstallmentPlanId(planId: InstallmentPlanId): List<Transaction> =

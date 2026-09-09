@@ -1,10 +1,14 @@
 package com.example.beetle.presentation.controller
 
 import com.example.beetle.application.port.StatisticsUseCase
+import com.example.beetle.application.port.DEFAULT_ANOMALY_BASELINE_MONTHS
 import com.example.beetle.domain.model.CategoryType
+import com.example.beetle.domain.model.ComparisonBaseline
 import com.example.beetle.domain.model.DateBasis
+import com.example.beetle.presentation.dto.CategoryAnomalyResponse
 import com.example.beetle.presentation.dto.CategoryBreakdownResponse
 import com.example.beetle.presentation.dto.ExpenseNatureBreakdownResponse
+import com.example.beetle.presentation.dto.MonthComparisonResponse
 import com.example.beetle.presentation.dto.MonthlySummaryResponse
 import com.example.beetle.presentation.dto.PaymentMethodBreakdownResponse
 import com.example.beetle.presentation.dto.PeriodSummaryResponse
@@ -74,6 +78,35 @@ class StatisticsController(
         @RequestParam @DateTimeFormat(pattern = "yyyy-MM") month: YearMonth,
     ): UpcomingBillsResponse =
         UpcomingBillsResponse.from(statisticsUseCase.upcomingBills(month))
+
+    /**
+     * 지정한 달을 다른 시점과 비교한다.
+     *
+     * `baseline` 기본값은 전월이다. 계절성이 있는 지출은 `SAME_MONTH_LAST_YEAR` 로 본다.
+     */
+    @GetMapping("/month-comparison")
+    fun monthComparison(
+        @RequestParam(defaultValue = "SPENT") basis: DateBasis,
+        @RequestParam @DateTimeFormat(pattern = "yyyy-MM") month: YearMonth,
+        @RequestParam(defaultValue = "PREVIOUS_MONTH") baseline: ComparisonBaseline,
+    ): MonthComparisonResponse =
+        MonthComparisonResponse.from(statisticsUseCase.monthComparison(basis, month, baseline))
+
+    /** 평소보다 지출이 튄 카테고리. */
+    @GetMapping("/category-anomalies")
+    fun categoryAnomalies(
+        @RequestParam(defaultValue = "SPENT") basis: DateBasis,
+        @RequestParam @DateTimeFormat(pattern = "yyyy-MM") month: YearMonth,
+        // 어노테이션의 defaultValue 는 컴파일 타임 상수만 받으므로 문자열 템플릿을 쓸 수 없다.
+        // 상수의 단일 출처를 지키기 위해 nullable 로 받고 여기서 기본값을 적용한다.
+        @RequestParam(required = false) baselineMonths: Int?,
+    ): CategoryAnomalyResponse = CategoryAnomalyResponse.from(
+        statisticsUseCase.categoryAnomalies(
+            basis = basis,
+            month = month,
+            baselineMonths = baselineMonths ?: DEFAULT_ANOMALY_BASELINE_MONTHS,
+        ),
+    )
 
     @GetMapping("/monthly-trend")
     fun monthlyTrend(

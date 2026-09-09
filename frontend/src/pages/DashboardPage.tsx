@@ -1,20 +1,29 @@
 import { Link } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { AmountText } from '@/components/common/AmountText'
+import { ChangeBadge } from '@/components/common/ChangeBadge'
 import { QueryState } from '@/components/common/QueryState'
 import { PeriodSelector } from '@/components/layout/PeriodSelector'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { expenseNatureSlices, formatTooltipAmount } from '@/features/analytics/chartData'
 import { topExpenses, topExpenseShare } from '@/features/analytics/topExpenses'
 import {
+  useCategoryAnomalies,
   useExpenseNatureBreakdown,
+  useMonthComparison,
   usePeriodSummary,
   useUpcomingBills,
 } from '@/features/analytics/queries'
 import { useTransactions } from '@/features/transactions/queries'
 import { useCategoryMap } from '@/features/categories/queries'
 import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
-import { dateBasisLabel, formatKrw, formatMonthDay, formatPercentage } from '@/lib/format'
+import {
+  dateBasisLabel,
+  formatKrw,
+  formatMonthDay,
+  formatPercentage,
+  formatSignedPercentage,
+} from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
 import { usePeriodParams, usePeriodStore } from '@/store/periodStore'
 
@@ -31,6 +40,8 @@ export function DashboardPage() {
   const yearMonth = usePeriodStore((state) => state.yearMonth)
 
   const summary = usePeriodSummary(params)
+  const comparison = useMonthComparison(params.basis, yearMonth)
+  const anomalies = useCategoryAnomalies(params.basis, yearMonth)
   const nature = useExpenseNatureBreakdown(params)
   // 청구 예정액은 "다음 달에 나갈 돈" 이 관심사이므로 다음 달을 본다.
   const upcoming = useUpcomingBills(shiftYearMonth(yearMonth, 1))
@@ -41,6 +52,7 @@ export function DashboardPage() {
   const recent = (transactions.data ?? []).slice(0, 8)
   const topItems = topExpenses(transactions.data ?? [], categories, TOP_EXPENSE_LIMIT)
   const topShare = topExpenseShare(topItems, summary.data?.expense ?? 0)
+  const anomalyItems = anomalies.data?.anomalies ?? []
 
   return (
     <div className="space-y-6">
@@ -51,8 +63,16 @@ export function DashboardPage() {
           <CardHeader>
             <CardTitle>수입</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grid gap-1">
             <AmountText amount={summary.data?.income ?? 0} tone="income" className="text-xl" />
+            {comparison.data && (
+              <ChangeBadge
+                subject="income"
+                change={comparison.data.income.change}
+                changePercentage={comparison.data.income.changePercentage}
+                baselineLabel="지난달"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -60,8 +80,16 @@ export function DashboardPage() {
           <CardHeader>
             <CardTitle>지출</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grid gap-1">
             <AmountText amount={summary.data?.expense ?? 0} tone="expense" className="text-xl" />
+            {comparison.data && (
+              <ChangeBadge
+                subject="expense"
+                change={comparison.data.expense.change}
+                changePercentage={comparison.data.expense.changePercentage}
+                baselineLabel="지난달"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -69,13 +97,20 @@ export function DashboardPage() {
           <CardHeader>
             <CardTitle>수지</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="grid gap-1">
             <AmountText
               amount={summary.data?.balance ?? 0}
               signed
               tone="auto"
               className="text-xl"
             />
+            {comparison.data && (
+              <ChangeBadge
+                subject="balance"
+                change={comparison.data.balanceChange}
+                baselineLabel="지난달"
+              />
+            )}
           </CardContent>
         </Card>
 
@@ -93,6 +128,53 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       </section>
+
+      {/*
+        평소보다 튄 항목이 있을 때만 보여준다. 매달 빈 카드가 있으면 소음이 된다.
+        판정 기준을 함께 적어 결과를 신뢰할 수 있게 한다.
+      */}
+      {anomalyItems.length > 0 && (
+        <Card className="border-expense/40 bg-expense/5">
+          <CardHeader>
+            <CardTitle className="text-foreground">평소보다 많이 쓴 항목</CardTitle>
+            <CardDescription>
+              최근 {anomalies.data?.baselineMonths ?? 3}개월 평균보다{' '}
+              {formatPercentage(anomalies.data?.criteria.minimumIncreasePercentage ?? 30)} 이상,{' '}
+              {formatKrw(anomalies.data?.criteria.minimumIncreaseAmount ?? 30_000)} 이상 늘어난
+              카테고리입니다.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ul className="divide-y">
+              {anomalyItems.map((item) => (
+                <li key={item.categoryId}>
+                  <Link
+                    to={buildTransactionsPath({ categoryId: item.categoryId })}
+                    className="flex items-center justify-between gap-3 rounded px-1.5 py-2 transition-colors hover:bg-accent"
+                    title={`${item.categoryName} 거래 내역 보기`}
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium">
+                        {item.categoryName}
+                      </span>
+                      <span className="block text-xs text-muted-foreground">
+                        평균 {formatKrw(item.baselineAverage)} → 이번 달{' '}
+                        {formatKrw(item.current)}
+                      </span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <AmountText amount={item.change} signed tone="expense" className="text-sm" />
+                      <span className="block text-xs text-muted-foreground">
+                        {formatSignedPercentage(item.changePercentage)}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

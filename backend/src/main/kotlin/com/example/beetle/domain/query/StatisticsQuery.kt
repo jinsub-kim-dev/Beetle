@@ -64,7 +64,34 @@ interface StatisticsQuery {
 
     /** 월별 추이. 시작 월부터 종료 월까지 거래가 없는 월도 0원으로 채워 반환한다. */
     fun monthlyTrend(basis: DateBasis, from: YearMonth, to: YearMonth): List<MonthlySummary>
+
+    /**
+     * 카테고리별·월별 지출 합계.
+     *
+     * 이상치 판정(평소 대비 급증)의 입력이다. 판정 규칙은 도메인 서비스가 갖고,
+     * 여기서는 판정에 필요한 최소 집계만 내려준다.
+     * 거래가 없는 (카테고리, 월) 조합은 결과에 포함되지 않는다.
+     */
+    fun monthlyCategoryExpenses(
+        basis: DateBasis,
+        from: YearMonth,
+        to: YearMonth,
+    ): List<MonthlyCategoryExpense>
 }
+
+/**
+ * 특정 카테고리의 특정 월 지출 합계.
+ *
+ * [nature] 가 non-null 인 이유: 이 조회는 지출만 대상으로 하고, 지출 카테고리는
+ * 성격이 필수다(PRD 2-②). 널 검사를 두면 도달할 수 없는 분기가 된다.
+ */
+data class MonthlyCategoryExpense(
+    val categoryId: CategoryId,
+    val categoryName: String,
+    val nature: ExpenseNature,
+    val yearMonth: YearMonth,
+    val total: Money,
+)
 
 /** 기간 요약 결과. */
 data class PeriodSummary(

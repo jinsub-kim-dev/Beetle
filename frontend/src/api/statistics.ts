@@ -1,14 +1,21 @@
 import { apiClient } from './client'
 import type {
+  CategoryAnomalyReport,
   CategoryBreakdown,
   ExpenseNatureBreakdown,
+  MonthComparison,
   MonthlySummary,
   PaymentMethodBreakdown,
   PeriodParams,
   PeriodSummary,
   UpcomingBills,
 } from '@/types/api'
-import type { CategoryType, DateBasis, YearMonthString } from '@/types/domain'
+import type {
+  CategoryType,
+  ComparisonBaseline,
+  DateBasis,
+  YearMonthString,
+} from '@/types/domain'
 
 const BASE_PATH = '/api/statistics'
 
@@ -66,6 +73,31 @@ export const statisticsApi = {
     const { data } = await apiClient.get<MonthlySummary[]>(`${BASE_PATH}/monthly-trend`, {
       params: { basis, from, to },
     })
+    return data
+  },
+
+  /** 지정한 달을 다른 시점과 비교한다. 기본은 전월이다. */
+  async monthComparison(
+    basis: DateBasis,
+    month: YearMonthString,
+    baseline: ComparisonBaseline = 'PREVIOUS_MONTH',
+  ): Promise<MonthComparison> {
+    const { data } = await apiClient.get<MonthComparison>(`${BASE_PATH}/month-comparison`, {
+      params: { basis, month, baseline },
+    })
+    return data
+  },
+
+  /** 평소보다 지출이 튄 카테고리. */
+  async categoryAnomalies(
+    basis: DateBasis,
+    month: YearMonthString,
+    baselineMonths?: number,
+  ): Promise<CategoryAnomalyReport> {
+    const { data } = await apiClient.get<CategoryAnomalyReport>(
+      `${BASE_PATH}/category-anomalies`,
+      { params: baselineMonths === undefined ? { basis, month } : { basis, month, baselineMonths } },
+    )
     return data
   },
 }

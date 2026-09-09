@@ -10,6 +10,7 @@ import {
   formatMonthDay,
   formatPercentage,
   formatSignedKrw,
+  formatSignedPercentage,
   formatYearMonth,
   installmentLabel,
   paymentMethodTypeLabel,
@@ -134,6 +135,26 @@ describe('format - 표시 포맷', () => {
       expect(formatPercentage(67.88)).toBe('67.9%')
       expect(formatPercentage(100)).toBe('100.0%')
       expect(formatPercentage(0)).toBe('0.0%')
+    })
+  })
+
+  describe('formatSignedPercentage', () => {
+    it.each([
+      [63.07, '+63.1%'],
+      [0.04, '+0.0%'],
+      [-30, '-30.0%'],
+      [0, '0.0%'],
+    ])('증감률 %s 는 %s 로 표기한다', (percentage, expected) => {
+      expect(formatSignedPercentage(percentage)).toBe(expected)
+    })
+
+    it('증감률이 없으면 신규로 표기한다', () => {
+      // 기준이 0원이면 증감률을 정의할 수 없다. 0% 로 쓰면 "변동 없음" 으로 읽힌다
+      expect(formatSignedPercentage(undefined)).toBe('신규')
+    })
+
+    it('증감률이 없을 때의 표기를 바꿀 수 있다', () => {
+      expect(formatSignedPercentage(undefined, '-')).toBe('-')
     })
   })
 })

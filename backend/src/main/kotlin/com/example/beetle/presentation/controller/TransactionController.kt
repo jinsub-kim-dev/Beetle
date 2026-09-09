@@ -56,6 +56,7 @@ class TransactionController(
         @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
         @RequestParam(required = false) categoryId: Long?,
         @RequestParam(required = false) paymentMethodId: Long?,
+        @RequestParam(required = false) keyword: String?,
     ): List<TransactionResponse> = transactionUseCase.search(
         TransactionSearchQuery(
             basis = basis,
@@ -63,6 +64,7 @@ class TransactionController(
             to = to,
             categoryId = categoryId?.let(::CategoryId),
             paymentMethodId = paymentMethodId?.let(::PaymentMethodId),
+            keyword = keyword,
         ),
     ).map(TransactionResponse::from)
 

@@ -12,10 +12,13 @@
 export interface TransactionFilter {
   categoryId?: number
   paymentMethodId?: number
+  /** 메모 부분 일치 검색어. */
+  keyword?: string
 }
 
 const CATEGORY_PARAM = 'categoryId'
 const PAYMENT_METHOD_PARAM = 'paymentMethodId'
+const KEYWORD_PARAM = 'keyword'
 
 /**
  * 쿼리 파라미터에서 양의 정수만 식별자로 받아들인다.
@@ -41,6 +44,10 @@ export function parseTransactionFilter(params: URLSearchParams): TransactionFilt
   const paymentMethodId = parseId(params.get(PAYMENT_METHOD_PARAM))
   if (paymentMethodId !== undefined) filter.paymentMethodId = paymentMethodId
 
+  // 공백만 입력한 검색어는 조건으로 보지 않는다.
+  const keyword = params.get(KEYWORD_PARAM)?.trim()
+  if (keyword !== undefined && keyword !== '') filter.keyword = keyword
+
   return filter
 }
 
@@ -52,12 +59,19 @@ export function toFilterSearchParams(filter: TransactionFilter): Record<string, 
   if (filter.paymentMethodId !== undefined) {
     params[PAYMENT_METHOD_PARAM] = String(filter.paymentMethodId)
   }
+  if (filter.keyword !== undefined && filter.keyword.trim() !== '') {
+    params[KEYWORD_PARAM] = filter.keyword.trim()
+  }
 
   return params
 }
 
 export function isEmptyFilter(filter: TransactionFilter): boolean {
-  return filter.categoryId === undefined && filter.paymentMethodId === undefined
+  return (
+    filter.categoryId === undefined &&
+    filter.paymentMethodId === undefined &&
+    (filter.keyword === undefined || filter.keyword.trim() === '')
+  )
 }
 
 /**

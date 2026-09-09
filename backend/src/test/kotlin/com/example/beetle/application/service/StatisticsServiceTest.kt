@@ -2,6 +2,7 @@ package com.example.beetle.application.service
 
 import com.example.beetle.domain.exception.InvariantViolationException
 import com.example.beetle.domain.model.CategoryId
+import com.example.beetle.domain.model.ComparisonBaseline
 import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.ExpenseNature
@@ -10,10 +11,12 @@ import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.PaymentMethodType
 import com.example.beetle.domain.query.CategoryAggregate
 import com.example.beetle.domain.query.ExpenseNatureAggregate
+import com.example.beetle.domain.query.MonthlyCategoryExpense
 import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PaymentMethodAggregate
 import com.example.beetle.domain.query.PeriodSummary
 import com.example.beetle.domain.query.StatisticsQuery
+import com.example.beetle.domain.service.SpendingAnomalyDetector
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -32,7 +36,9 @@ import java.time.YearMonth
 class StatisticsServiceTest {
 
     private val statisticsQuery = mockk<StatisticsQuery>()
-    private val statisticsService = StatisticsService(statisticsQuery)
+
+    // 이상치 판정은 검증 대상 로직이므로 목이 아닌 실제 구현을 쓴다.
+    private val statisticsService = StatisticsService(statisticsQuery, SpendingAnomalyDetector())
 
     private val 일월시작 = LocalDate.of(2026, 1, 1)
     private val 일월종료 = LocalDate.of(2026, 1, 31)
@@ -317,6 +323,274 @@ class StatisticsServiceTest {
 
             // then
             assertThat(bills.unsettledExpense).isEqualTo(Money.of(500_000))
+        }
+    }
+
+    @Nested
+    @DisplayName("월 비교 - 복기의 기준선")
+    inner class MonthComparisonCases {
+
+        private val 구월 = YearMonth.of(2026, 9)
+
+        private fun 요약(income: Long, expense: Long) =
+            PeriodSummary(Money.of(income), Money.of(expense), Money.ZERO, 1)
+
+        private fun 카테고리집계(id: Long, name: String, total: Long) = CategoryAggregate(
+            categoryId = CategoryId(id),
+            categoryName = name,
+            type = CategoryType.EXPENSE,
+            nature = ExpenseNature.VARIABLE,
+            total = Money.of(total),
+            transactionCount = 1,
+        )
+
+        private fun 조회설정(
+            current: PeriodSummary,
+            baseline: PeriodSummary,
+            currentCategories: List<CategoryAggregate> = emptyList(),
+            baselineCategories: List<CategoryAggregate> = emptyList(),
+            baselineMonth: YearMonth = YearMonth.of(2026, 8),
+        ) {
+            every {
+                statisticsQuery.summarize(
+                    DateBasis.SPENT, 구월.atDay(1), 구월.atEndOfMonth(),
+                )
+            } returns current
+            every {
+                statisticsQuery.summarize(
+                    DateBasis.SPENT, baselineMonth.atDay(1), baselineMonth.atEndOfMonth(),
+                )
+            } returns baseline
+            every {
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT, 구월.atDay(1), 구월.atEndOfMonth(), CategoryType.EXPENSE,
+                )
+            } returns currentCategories
+            every {
+                statisticsQuery.aggregateByCategory(
+                    DateBasis.SPENT,
+                    baselineMonth.atDay(1),
+                    baselineMonth.atEndOfMonth(),
+                    CategoryType.EXPENSE,
+                )
+            } returns baselineCategories
+        }
+
+        @Test
+        fun `전월과 비교해 증감액과 증감률을 계산한다`() {
+            // given
+            조회설정(
+                current = 요약(income = 3_350_000, expense = 2_120_000),
+                baseline = 요약(income = 3_200_000, expense = 1_300_000),
+            )
+
+            // when
+            val comparison = statisticsService.monthComparison(DateBasis.SPENT, 구월)
+
+            // then
+            assertThat(comparison.baselineMonth).isEqualTo(YearMonth.of(2026, 8))
+            assertThat(comparison.expense.change.amount).isEqualTo(820_000)
+            assertThat(comparison.expense.changeRate!!.percentage).isEqualTo(63.07)
+            assertThat(comparison.income.change.amount).isEqualTo(150_000)
+        }
+
+        @Test
+        fun `수지 증감은 부호가 바뀌어도 계산된다`() {
+            // given: 흑자 123만 -> 적자 -50만
+            조회설정(
+                current = 요약(income = 1_000_000, expense = 1_500_000),
+                baseline = 요약(income = 3_200_000, expense = 1_970_000),
+            )
+
+            // when
+            val comparison = statisticsService.monthComparison(DateBasis.SPENT, 구월)
+
+            // then
+            assertThat(comparison.currentBalance.isDeficit).isTrue()
+            assertThat(comparison.baselineBalance.isSurplus).isTrue()
+            assertThat(comparison.balanceChange.amount).isEqualTo(-500_000 - 1_230_000)
+            assertThat(comparison.balanceChange.isDecrease).isTrue()
+        }
+
+        @Test
+        fun `전년 동월과도 비교할 수 있다`() {
+            // given: 계절성이 있는 지출은 작년 같은 달과 봐야 한다
+            조회설정(
+                current = 요약(0, 500_000),
+                baseline = 요약(0, 400_000),
+                baselineMonth = YearMonth.of(2025, 9),
+            )
+
+            // when
+            val comparison = statisticsService.monthComparison(
+                DateBasis.SPENT, 구월, ComparisonBaseline.SAME_MONTH_LAST_YEAR,
+            )
+
+            // then
+            assertThat(comparison.baselineMonth).isEqualTo(YearMonth.of(2025, 9))
+            assertThat(comparison.expense.change.amount).isEqualTo(100_000)
+        }
+
+        @Test
+        fun `양쪽 달의 카테고리를 합쳐 증가액 내림차순으로 정렬한다`() {
+            // given
+            조회설정(
+                current = 요약(0, 1_000_000),
+                baseline = 요약(0, 400_000),
+                currentCategories = listOf(
+                    카테고리집계(1, "식비", 300_000),
+                    카테고리집계(2, "쇼핑", 700_000),
+                ),
+                baselineCategories = listOf(
+                    카테고리집계(1, "식비", 200_000),
+                    카테고리집계(2, "쇼핑", 200_000),
+                ),
+            )
+
+            // when
+            val comparison = statisticsService.monthComparison(DateBasis.SPENT, 구월)
+
+            // then
+            assertThat(comparison.categories.map { it.categoryName }).containsExactly("쇼핑", "식비")
+            assertThat(comparison.categories.map { it.comparison.change.amount })
+                .containsExactly(500_000, 100_000)
+        }
+
+        @Test
+        fun `이번 달에만 있는 카테고리는 기준을 0원으로 채운다`() {
+            // given: 이번 달 새로 생긴 지출
+            조회설정(
+                current = 요약(0, 500_000),
+                baseline = 요약(0, 0),
+                currentCategories = listOf(카테고리집계(3, "의료비", 500_000)),
+                baselineCategories = emptyList(),
+            )
+
+            // when
+            val item = statisticsService.monthComparison(DateBasis.SPENT, 구월).categories.single()
+
+            // then
+            assertThat(item.comparison.baseline).isEqualTo(Money.ZERO)
+            assertThat(item.comparison.change.amount).isEqualTo(500_000)
+            // 0에서 늘어난 변화의 비율은 정의할 수 없다
+            assertThat(item.comparison.changeRate).isNull()
+        }
+
+        @Test
+        fun `지난달에만 있던 카테고리도 사라진 지출로 포함한다`() {
+            // given: 끊은 구독처럼 사라진 지출도 복기 대상이다
+            조회설정(
+                current = 요약(0, 0),
+                baseline = 요약(0, 120_000),
+                currentCategories = emptyList(),
+                baselineCategories = listOf(카테고리집계(4, "구독료", 120_000)),
+            )
+
+            // when
+            val item = statisticsService.monthComparison(DateBasis.SPENT, 구월).categories.single()
+
+            // then
+            assertThat(item.categoryName).isEqualTo("구독료")
+            assertThat(item.comparison.current).isEqualTo(Money.ZERO)
+            assertThat(item.comparison.change.amount).isEqualTo(-120_000)
+            assertThat(item.comparison.changeRate!!.percentage).isEqualTo(-100.0)
+        }
+
+        @Test
+        fun `거래가 없는 두 달을 비교하면 변동이 없다`() {
+            // given
+            조회설정(current = 요약(0, 0), baseline = 요약(0, 0))
+
+            // when
+            val comparison = statisticsService.monthComparison(DateBasis.SPENT, 구월)
+
+            // then
+            assertThat(comparison.expense.change.isUnchanged).isTrue()
+            assertThat(comparison.expense.changeRate).isNull()
+            assertThat(comparison.categories).isEmpty()
+        }
+    }
+
+    @Nested
+    @DisplayName("이상치 판정")
+    inner class CategoryAnomalies {
+
+        private val 구월 = YearMonth.of(2026, 9)
+
+        private fun 지출(id: Long, name: String, month: YearMonth, amount: Long) =
+            MonthlyCategoryExpense(
+                categoryId = CategoryId(id),
+                categoryName = name,
+                nature = ExpenseNature.VARIABLE,
+                yearMonth = month,
+                total = Money.of(amount),
+            )
+
+        @Test
+        fun `기준 창을 포함해 조회하고 판정 결과를 전달한다`() {
+            // given: 3개월 창이면 6월부터 9월까지 조회해야 한다
+            every {
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 6), 구월,
+                )
+            } returns listOf(
+                지출(1, "식비", YearMonth.of(2026, 6), 300_000),
+                지출(1, "식비", YearMonth.of(2026, 7), 300_000),
+                지출(1, "식비", YearMonth.of(2026, 8), 300_000),
+                지출(1, "식비", 구월, 600_000),
+            )
+
+            // when
+            val report = statisticsService.categoryAnomalies(DateBasis.SPENT, 구월, 3)
+
+            // then
+            assertThat(report.month).isEqualTo(구월)
+            assertThat(report.baselineMonths).isEqualTo(3)
+            assertThat(report.anomalies).singleElement()
+                .extracting<String> { it.categoryName }
+                .isEqualTo("식비")
+        }
+
+        @Test
+        fun `기본 비교 창은 3개월이다`() {
+            // given
+            every {
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 6), 구월,
+                )
+            } returns emptyList()
+
+            // when
+            val report = statisticsService.categoryAnomalies(DateBasis.SPENT, 구월)
+
+            // then
+            assertThat(report.baselineMonths).isEqualTo(3)
+            assertThat(report.anomalies).isEmpty()
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = [0, -1, 13, 100])
+        fun `비교 창이 1개월 미만이거나 12개월을 넘으면 거부한다`(baselineMonths: Int) {
+            // 무제한 허용 시 조회 범위가 과도해진다
+            assertThatExceptionOfType(InvariantViolationException::class.java)
+                .isThrownBy { statisticsService.categoryAnomalies(DateBasis.SPENT, 구월, baselineMonths) }
+                .withMessageContaining("1 이상 12 이하")
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = [1, 3, 12])
+        fun `허용 범위의 비교 창은 통과한다`(baselineMonths: Int) {
+            // given
+            every {
+                statisticsQuery.monthlyCategoryExpenses(
+                    DateBasis.SPENT, 구월.minusMonths(baselineMonths.toLong()), 구월,
+                )
+            } returns emptyList()
+
+            // when & then
+            assertThatNoException().isThrownBy {
+                statisticsService.categoryAnomalies(DateBasis.SPENT, 구월, baselineMonths)
+            }
         }
     }
 

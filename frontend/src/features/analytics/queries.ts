@@ -2,7 +2,12 @@ import { useQuery } from '@tanstack/react-query'
 import { statisticsApi } from '@/api'
 import { queryKeys } from '@/api/queryKeys'
 import type { PeriodParams } from '@/types/api'
-import type { CategoryType, DateBasis, YearMonthString } from '@/types/domain'
+import type {
+  CategoryType,
+  ComparisonBaseline,
+  DateBasis,
+  YearMonthString,
+} from '@/types/domain'
 
 export function usePeriodSummary(params: PeriodParams) {
   return useQuery({
@@ -47,5 +52,29 @@ export function useMonthlyTrend(basis: DateBasis, from: YearMonthString, to: Yea
   return useQuery({
     queryKey: queryKeys.statistics.monthlyTrend(basis, from, to),
     queryFn: () => statisticsApi.monthlyTrend(basis, from, to),
+  })
+}
+
+/** 지정한 달을 다른 시점과 비교한다. 복기의 기준선을 만든다. */
+export function useMonthComparison(
+  basis: DateBasis,
+  month: YearMonthString,
+  baseline: ComparisonBaseline = 'PREVIOUS_MONTH',
+) {
+  return useQuery({
+    queryKey: queryKeys.statistics.monthComparison(basis, month, baseline),
+    queryFn: () => statisticsApi.monthComparison(basis, month, baseline),
+  })
+}
+
+/** 평소보다 지출이 튄 카테고리. */
+export function useCategoryAnomalies(
+  basis: DateBasis,
+  month: YearMonthString,
+  baselineMonths?: number,
+) {
+  return useQuery({
+    queryKey: queryKeys.statistics.categoryAnomalies(basis, month, baselineMonths),
+    queryFn: () => statisticsApi.categoryAnomalies(basis, month, baselineMonths),
   })
 }

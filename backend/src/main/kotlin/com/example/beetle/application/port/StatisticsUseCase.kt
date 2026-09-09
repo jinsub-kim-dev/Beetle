@@ -1,9 +1,16 @@
 package com.example.beetle.application.port
 
+import com.example.beetle.domain.model.AmountChange
+import com.example.beetle.domain.model.Balance
+import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.CategoryType
+import com.example.beetle.domain.model.Comparison
+import com.example.beetle.domain.model.ComparisonBaseline
 import com.example.beetle.domain.model.DateBasis
+import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.Ratio
+import com.example.beetle.domain.service.SpendingAnomaly
 import com.example.beetle.domain.query.CategoryAggregate
 import com.example.beetle.domain.query.ExpenseNatureAggregate
 import com.example.beetle.domain.query.MonthlySummary
@@ -59,7 +66,66 @@ interface StatisticsUseCase {
 
     /** 월별 추이. */
     fun monthlyTrend(basis: DateBasis, from: YearMonth, to: YearMonth): List<MonthlySummary>
+
+    /**
+     * 지정한 달을 다른 시점과 비교한다.
+     *
+     * "이번 달 식비 45만원" 만으로는 많은지 알 수 없다. 비교 기준이 있어야 복기가 된다.
+     */
+    fun monthComparison(
+        basis: DateBasis,
+        month: YearMonth,
+        baseline: ComparisonBaseline = ComparisonBaseline.PREVIOUS_MONTH,
+    ): MonthComparison
+
+    /** 평소보다 지출이 튄 카테고리를 찾는다. */
+    fun categoryAnomalies(
+        basis: DateBasis,
+        month: YearMonth,
+        baselineMonths: Int = DEFAULT_ANOMALY_BASELINE_MONTHS,
+    ): CategoryAnomalyReport
 }
+
+/** 이상치 판정의 기본 비교 창. 계절성에 휘둘리지 않으면서 최근 흐름을 반영하는 길이다. */
+const val DEFAULT_ANOMALY_BASELINE_MONTHS: Int = 3
+
+/** 이상치 판정 창의 상한. 무제한 허용 시 조회 범위가 과도해진다. */
+const val MAX_ANOMALY_BASELINE_MONTHS: Int = 12
+
+/**
+ * 두 달의 비교 결과.
+ *
+ * @param categories 지출 카테고리별 비교. 증가액 내림차순이며, 한쪽 달에만 있는
+ *   카테고리도 반대쪽을 0원으로 채워 포함한다.
+ */
+data class MonthComparison(
+    val basis: DateBasis,
+    val month: YearMonth,
+    val baselineMonth: YearMonth,
+    val income: Comparison,
+    val expense: Comparison,
+    val currentBalance: Balance,
+    val baselineBalance: Balance,
+    val categories: List<CategoryComparison>,
+) {
+    /** 수지 증감. 수지는 음수가 가능하므로 [Comparison] 으로 표현하지 않는다. */
+    val balanceChange: AmountChange get() = AmountChange.between(currentBalance, baselineBalance)
+}
+
+data class CategoryComparison(
+    val categoryId: CategoryId,
+    val categoryName: String,
+    val nature: ExpenseNature?,
+    val comparison: Comparison,
+)
+
+/** 이상치 판정 결과. 판정 기준을 함께 담아 화면에서 설명할 수 있게 한다. */
+data class CategoryAnomalyReport(
+    val basis: DateBasis,
+    val month: YearMonth,
+    val baselineMonths: Int,
+    val anomalies: List<SpendingAnomaly>,
+)
 
 /**
  * 카테고리별 집계와 점유율.

@@ -22,6 +22,14 @@ export type PaymentMethodType = 'CREDIT_CARD' | 'CHECK_CARD' | 'BANK_ACCOUNT' | 
  */
 export type DateBasis = 'SPENT' | 'BILL'
 
+/**
+ * 비교 기준 시점.
+ *
+ * - `PREVIOUS_MONTH`: 직전 달. 최근 변화를 본다
+ * - `SAME_MONTH_LAST_YEAR`: 작년 같은 달. 계절성이 있는 지출에 쓴다
+ */
+export type ComparisonBaseline = 'PREVIOUS_MONTH' | 'SAME_MONTH_LAST_YEAR'
+
 /** `yyyy-MM-dd` 형식의 날짜 문자열. */
 export type IsoDate = string
 

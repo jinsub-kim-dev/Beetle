@@ -120,3 +120,19 @@ export function installmentLabel(sequence: number, totalMonths: number): string 
 export function formatPercentage(percentage: number): string {
   return `${percentage.toFixed(1)}%`
 }
+
+/**
+ * 증감률 표기. 부호를 드러낸다. 예: `+63.1%`, `-30.0%`
+ *
+ * 기준이 0원이어서 증감률을 정의할 수 없는 경우(`undefined`)에는 [undefinedLabel] 을
+ * 반환한다. 0%로 표기하면 "변동 없음" 으로 오해된다.
+ */
+export function formatSignedPercentage(
+  percentage: number | undefined,
+  undefinedLabel = '신규',
+): string {
+  if (percentage === undefined) return undefinedLabel
+
+  const sign = percentage > 0 ? '+' : ''
+  return `${sign}${percentage.toFixed(1)}%`
+}

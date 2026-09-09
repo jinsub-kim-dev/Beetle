@@ -30,6 +30,7 @@ import {
   usePaymentMethodBreakdown,
 } from '@/features/analytics/queries'
 import { useInstallmentPlans } from '@/features/installments/queries'
+import { MonthComparisonPanel } from '@/features/analytics/MonthComparisonPanel'
 import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
 import { formatKrw, formatKrwCompact, formatPercentage, formatYearMonth } from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
@@ -69,6 +70,8 @@ export function AnalyticsPage() {
   return (
     <div className="space-y-6">
       <PeriodSelector />
+
+      <MonthComparisonPanel basis={basis} yearMonth={yearMonth} />
 
       <Card>
         <CardHeader>
