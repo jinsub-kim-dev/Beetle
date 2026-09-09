@@ -5,7 +5,10 @@
 beetle:
   db:
     host: ${DB_HOST:localhost}
-    port: ${DB_PORT:3306}
+    # docker-compose 가 호스트에 노출하는 포트다(컨테이너 안쪽은 3306).
+    # 표준 포트를 쓰지 않는 이유는 호스트의 다른 MySQL 과 충돌하기 때문이다.
+    # 컨테이너로 뜨는 백엔드는 compose 가 DB_PORT=3306 을 주므로 영향을 받지 않는다.
+    port: ${DB_PORT:13306}
     name: ${DB_NAME:beetle}
     user: ${DB_USER:beetle}
     password: ${DB_PASSWORD:beetlepassword}

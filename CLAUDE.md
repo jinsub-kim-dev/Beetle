@@ -31,7 +31,7 @@
 | 관리 엔드포인트 | health,info,metrics,env,beans,mappings | **health 만** | `env`/`beans` 는 설정과 내부 구조를 드러냅니다 |
 | 오류 응답 | 예외 메시지 포함 | code/message 만 | PRD 7.1 의 오류 규약만 노출합니다 |
 | SQL 로그 | 출력 | 미출력 | |
-| 호스트 포트 노출 | MySQL·백엔드·프론트엔드 | **프론트엔드만** | 브라우저가 보는 오리진은 하나이며 nginx 가 `/api` 를 프록시합니다 |
+| 호스트 포트 노출 | MySQL(13306)·백엔드·프론트엔드 | **프론트엔드만** | 브라우저가 보는 오리진은 하나이며 nginx 가 `/api` 를 프록시합니다 |
 | 프론트엔드 소스맵 | 포함 | 미포함 | 원본 코드가 그대로 노출됩니다 |
 | 화면 환경 배지 | `LOCAL` 표시 | 미표시 | 로컬 화면을 배포 화면으로 착각하고 데이터를 넣는 일을 막습니다 |
 
@@ -58,7 +58,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
   |---|---|---|---|
   | 프론트엔드 | `http://localhost:5173` | `http://<host>` (기본 80) | nginx 가 `/api` 를 백엔드로 프록시하므로 CORS 설정이 필요 없습니다 |
   | 백엔드 | `http://localhost:8080` | 노출하지 않음 | 로컬 문서: `/swagger-ui.html` |
-  | MySQL | `localhost:3306` | 노출하지 않음 | 데이터는 Docker Volume 에 보존됩니다 |
+  | MySQL | `localhost:13306` | 노출하지 않음 | 컨테이너 안쪽은 3306. 호스트의 다른 MySQL 과 충돌하지 않도록 표준 포트를 피합니다 |
 
 - **포트 충돌 시:** `.env.example` 을 `.env` 로 복사해 `FRONTEND_PORT`, `BACKEND_PORT`,
   `DB_PORT` 를 바꿉니다. 해당 포트를 다른 프로세스가 점유하고 있으면 컨테이너는 정상
@@ -67,8 +67,9 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 - **프론트엔드만 개발할 때:** `docker compose up -d mysql backend` 로 백엔드를 띄우고
   `cd frontend && npm run dev` 를 실행합니다. Vite 개발 서버가 `/api` 를 백엔드로
   프록시합니다.
-- **컨테이너 없이 백엔드만 띄울 때:** 프로필을 지정하지 않으면 dev 로 뜨고 `localhost:3306`
-  에 붙습니다. `SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun` 은 접속 정보가 없으면
+- **컨테이너 없이 백엔드만 띄울 때:** 프로필을 지정하지 않으면 dev 로 뜨고, compose 가 띄운
+  MySQL 컨테이너(`localhost:13306`)에 붙습니다. `DB_PORT` 기본값이 compose 의 노출 포트와
+  같아야 하며, `ProfileConfigurationTest` 가 두 값의 일치를 검증합니다. `SPRING_PROFILES_ACTIVE=prod ./gradlew bootRun` 은 접속 정보가 없으면
   의도적으로 실패합니다.
 
 ---

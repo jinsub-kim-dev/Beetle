@@ -1,11 +1,13 @@
 package com.example.beetle.config
 
 import org.assertj.core.api.Assertions.assertThat
+import org.junit.jupiter.api.Assumptions.assumeTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.springframework.core.io.ClassPathResource
 import org.yaml.snakeyaml.Yaml
+import java.io.File
 
 /**
  * 환경별 설정 파일의 정책을 고정하는 테스트.
@@ -67,6 +69,21 @@ class ProfileConfigurationTest {
             assertThat(dev.getValue("beetle.db.name")).contains(":beetle")
             assertThat(dev.getValue("beetle.db.user")).contains(":beetle")
             assertThat(dev.getValue("beetle.db.password")).contains(":")
+        }
+
+        @Test
+        fun `DB 포트 기본값이 compose 가 노출하는 포트와 같다`() {
+            // 두 파일이 어긋나면 컨테이너 없이 백엔드만 띄웠을 때 조용히 접속에 실패한다.
+            // 로컬은 표준 포트(3306)를 피한다. 호스트에 이미 MySQL 이 있으면 충돌한다.
+            val composeFile = File("../docker-compose.override.yml")
+            assumeTrue(composeFile.exists(), "모노레포 루트 기준으로 실행할 때만 검증할 수 있다")
+
+            // `${DB_PORT:-13306}:3306` 에서 호스트 쪽 기본 포트를 뽑는다.
+            val published = publishedMysqlPortOf(composeFile)
+
+            assertThat(dev.getValue("beetle.db.port"))
+                .describedAs("dev 프로필의 DB 포트 기본값은 compose 노출 포트와 같아야 한다")
+                .isEqualTo("\${DB_PORT:$published}")
         }
 
         @Test
@@ -145,6 +162,19 @@ class ProfileConfigurationTest {
             assertThat(prod["spring.jpa.show-sql"]).isEqualTo("false")
             assertThat(prod["logging.level.com.example.beetle"]).isEqualTo("INFO")
         }
+    }
+
+    /** compose 파일에서 mysql 이 호스트에 노출하는 포트의 기본값을 읽는다. */
+    private fun publishedMysqlPortOf(composeFile: File): String {
+        val compose = composeFile.inputStream().use { Yaml().load<Map<String, Any?>>(it) }
+        val services = compose["services"] as Map<*, *>
+        val mysql = services["mysql"] as Map<*, *>
+        val mapping = (mysql["ports"] as List<*>).first().toString()
+
+        return mapping
+            .substringBefore(":3306")
+            .substringAfter(":-")
+            .removeSuffix("}")
     }
 
     /** YAML 을 `a.b.c` 형태의 평면 맵으로 읽는다. */

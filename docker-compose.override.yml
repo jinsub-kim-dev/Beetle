@@ -8,8 +8,13 @@
 services:
   mysql:
     # 로컬에서는 DB 에 직접 붙어 확인할 일이 많으므로 포트를 노출한다.
+    #
+    # 표준 포트(3306)를 쓰지 않는 이유: 호스트에 이미 MySQL 이 있는 환경에서 충돌한다.
+    # 컨테이너 안쪽은 3306 그대로이며, 이 값은 **호스트에 노출하는 포트**다.
+    # 이 기본값은 application-dev.yml 의 `beetle.db.port` 기본값과 같아야 하고,
+    # ProfileConfigurationTest 가 두 값의 일치를 검증한다.
     ports:
-      - "${DB_PORT:-3306}:3306"
+      - "${DB_PORT:-13306}:3306"
 
   backend:
     environment:

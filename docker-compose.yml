@@ -40,6 +40,8 @@ services:
       # 스프링 프로필은 환경별 파일이 지정한다. 지정하지 않으면 애플리케이션이
       # dev 로 뜬다 (application.yml 의 spring.profiles.default).
       DB_HOST: mysql
+      # 컨테이너 사이의 통신이므로 호스트에 노출하는 포트(DB_PORT)와 무관하게
+      # 컨테이너 안쪽 포트를 쓴다.
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-beetle}
       DB_USER: ${DB_USER:-beetle}

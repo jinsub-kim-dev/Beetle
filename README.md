@@ -91,7 +91,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
 | DB 접속 정보 | 기본값 있음 | 없으면 기동 실패 |
 | 시드 데이터 | 적용 | 미적용 |
 | API 문서 | 노출 | 차단 |
-| 노출 포트 | 프론트·백엔드·MySQL | 프론트엔드만 |
+| 노출 포트 | 프론트(5173)·백엔드(8080)·MySQL(13306) | 프론트엔드만 |
 | 프론트엔드 소스맵 | 포함 | 미포함 |
 | 화면 배지 | `LOCAL` | 없음 |
 
@@ -118,7 +118,9 @@ docker compose up -d mysql
 cd backend && ./gradlew bootRun
 ```
 프로필을 지정하지 않으면 dev 로 뜬다. `application-dev.yml` 의 DataSource 기본값이
-`localhost:3306` 이므로 추가 설정 없이 붙는다.
+`localhost:13306` — compose 가 MySQL 을 노출하는 포트 — 이므로 추가 설정 없이 붙는다.
+표준 포트(3306)를 쓰지 않는 이유는 호스트에 이미 MySQL 이 있는 환경에서 충돌하기 때문이다.
+두 값이 어긋나면 `ProfileConfigurationTest` 가 실패한다.
 
 프론트엔드를 Vite 개발 서버(HMR)로 실행:
 ```bash
