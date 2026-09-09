@@ -7,6 +7,8 @@ import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.TransactionId
 import com.example.beetle.presentation.dto.ChangeStatsExclusionRequest
+import com.example.beetle.presentation.dto.CarryOverFixedExpensesRequest
+import com.example.beetle.presentation.dto.FixedExpenseCarryOverResponse
 import com.example.beetle.presentation.dto.RegisterTransactionRequest
 import com.example.beetle.presentation.dto.TransactionResponse
 import com.example.beetle.presentation.dto.UpdateTransactionRequest
@@ -48,6 +50,18 @@ class TransactionController(
         val response = TransactionResponse.from(transaction)
         return ResponseEntity.created(URI.create("/api/transactions/${response.id}")).body(response)
     }
+
+    /**
+     * 지난달의 고정비를 지정한 달로 이월한다.
+     *
+     * 여러 번 호출해도 중복이 생기지 않는다. 대상 월에 이미 같은 고정비가 있으면
+     * 건너뛰고 그 개수를 응답에 담는다.
+     */
+    @PostMapping("/fixed-expense-carry-over")
+    fun carryOverFixedExpenses(
+        @Valid @RequestBody request: CarryOverFixedExpensesRequest,
+    ): FixedExpenseCarryOverResponse =
+        FixedExpenseCarryOverResponse.from(transactionUseCase.carryOverFixedExpenses(request.toCommand()))
 
     @GetMapping
     fun search(

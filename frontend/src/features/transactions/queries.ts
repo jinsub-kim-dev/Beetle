@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { transactionApi } from '@/api'
 import { queryKeys, transactionAffectedKeys } from '@/api/queryKeys'
 import type {
+  CarryOverFixedExpensesRequest,
   RegisterTransactionRequest,
   TransactionSearchParams,
   UpdateTransactionRequest,
@@ -74,5 +75,23 @@ export function useRemoveTransaction() {
   return useMutation({
     mutationFn: (id: number) => transactionApi.remove(id),
     onSuccess: invalidate,
+  })
+}
+
+/**
+ * 고정비 이월.
+ *
+ * 거래가 새로 생기므로 거래·통계·예산을 함께 무효화한다.
+ */
+export function useCarryOverFixedExpenses() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: (request: CarryOverFixedExpensesRequest) =>
+      transactionApi.carryOverFixedExpenses(request),
+    onSuccess: () =>
+      Promise.all(
+        transactionAffectedKeys.map((queryKey) => queryClient.invalidateQueries({ queryKey })),
+      ),
   })
 }

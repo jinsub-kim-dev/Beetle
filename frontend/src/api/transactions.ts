@@ -1,5 +1,7 @@
 import { apiClient } from './client'
 import type {
+  CarryOverFixedExpensesRequest,
+  FixedExpenseCarryOverResult,
   RegisterTransactionRequest,
   TransactionSearchParams,
   UpdateTransactionRequest,
@@ -57,5 +59,21 @@ export const transactionApi = {
 
   async remove(id: number): Promise<void> {
     await apiClient.delete(`${BASE_PATH}/${id}`)
+  },
+
+  /**
+   * 고정비 이월. 지난달의 고정비를 대상 월로 복사한다.
+   *
+   * 여러 번 호출해도 중복이 생기지 않는다. 대상 월에 이미 같은 고정비가 있으면
+   * 건너뛰고 그 개수를 응답에 담는다.
+   */
+  async carryOverFixedExpenses(
+    request: CarryOverFixedExpensesRequest,
+  ): Promise<FixedExpenseCarryOverResult> {
+    const { data } = await apiClient.post<FixedExpenseCarryOverResult>(
+      `${BASE_PATH}/fixed-expense-carry-over`,
+      request,
+    )
+    return data
   },
 }

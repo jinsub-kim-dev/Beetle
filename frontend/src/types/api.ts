@@ -10,6 +10,7 @@ import type {
   ExpenseNature,
   IsoDate,
   PaymentMethodType,
+  Transaction,
   YearMonthString,
 } from './domain'
 
@@ -93,6 +94,25 @@ export interface UpdateTransactionRequest {
   clearMemo?: boolean
   /** 소비일을 바꾸면 청구일도 서버가 다시 산출한다. */
   spentDate?: IsoDate
+}
+
+/**
+ * 고정비 이월 요청.
+ *
+ * 여러 번 보내도 중복이 생기지 않는다. 대상 월에 이미 같은 고정비가 있으면 건너뛴다.
+ */
+export interface CarryOverFixedExpensesRequest {
+  sourceMonth: YearMonthString
+  targetMonth: YearMonthString
+}
+
+export interface FixedExpenseCarryOverResult {
+  sourceMonth: YearMonthString
+  targetMonth: YearMonthString
+  createdCount: number
+  /** 이미 있어 건너뛴 항목 수. "왜 다 안 만들어졌나" 에 답하기 위해 표시한다. */
+  skippedCount: number
+  created: Transaction[]
 }
 
 export interface TransactionSearchParams {

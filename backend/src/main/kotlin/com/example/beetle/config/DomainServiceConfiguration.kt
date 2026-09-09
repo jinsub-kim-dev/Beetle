@@ -1,6 +1,7 @@
 package com.example.beetle.config
 
 import com.example.beetle.domain.service.BillDateCalculator
+import com.example.beetle.domain.service.FixedExpenseCarryOver
 import com.example.beetle.domain.service.InstallmentScheduler
 import com.example.beetle.domain.service.RecurringExpenseDetector
 import com.example.beetle.domain.service.SpendingAnomalyDetector
@@ -32,4 +33,7 @@ class DomainServiceConfiguration {
 
     @Bean
     fun spendingPatternAnalyzer(): SpendingPatternAnalyzer = SpendingPatternAnalyzer()
+
+    @Bean
+    fun fixedExpenseCarryOver(): FixedExpenseCarryOver = FixedExpenseCarryOver()
 }

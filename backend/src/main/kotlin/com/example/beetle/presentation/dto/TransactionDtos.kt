@@ -1,5 +1,7 @@
 package com.example.beetle.presentation.dto
 
+import com.example.beetle.application.port.CarryOverFixedExpensesCommand
+import com.example.beetle.application.port.FixedExpenseCarryOverResult
 import com.example.beetle.application.port.RegisterTransactionCommand
 import com.example.beetle.application.port.UpdateTransactionCommand
 import com.example.beetle.domain.model.CategoryId
@@ -11,6 +13,7 @@ import jakarta.validation.constraints.NotNull
 import jakarta.validation.constraints.Positive
 import jakarta.validation.constraints.Size
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 거래 등록 요청.
@@ -118,5 +121,48 @@ data class TransactionResponse(
             installmentPlanId = transaction.installmentPlanId?.value,
             installmentSequence = transaction.installmentSequence,
         )
+    }
+}
+
+/**
+ * 고정비 이월 요청.
+ *
+ * 월 단위 개념이므로 `yyyy-MM` 으로 받는다.
+ */
+data class CarryOverFixedExpensesRequest(
+    @field:NotNull(message = "원본 월을 지정해야 합니다.")
+    val sourceMonth: YearMonth?,
+
+    @field:NotNull(message = "대상 월을 지정해야 합니다.")
+    val targetMonth: YearMonth?,
+) {
+    fun toCommand(): CarryOverFixedExpensesCommand = CarryOverFixedExpensesCommand(
+        sourceMonth = requireNotNull(sourceMonth),
+        targetMonth = requireNotNull(targetMonth),
+    )
+}
+
+/**
+ * 고정비 이월 결과.
+ *
+ * @param skippedCount 대상 월에 이미 있어 건너뛴 항목 수. "왜 다 안 만들어졌나" 에
+ *   답할 수 있어야 한다
+ */
+data class FixedExpenseCarryOverResponse(
+    val sourceMonth: String,
+    val targetMonth: String,
+    val createdCount: Int,
+    val skippedCount: Int,
+    val created: List<TransactionResponse>,
+) {
+    companion object {
+        fun from(result: FixedExpenseCarryOverResult): FixedExpenseCarryOverResponse =
+            FixedExpenseCarryOverResponse(
+                sourceMonth = result.sourceMonth.toString(),
+                targetMonth = result.targetMonth.toString(),
+                createdCount = result.created.size,
+                skippedCount = result.skippedCount,
+                created = result.created.map(TransactionResponse::from),
+            )
     }
 }

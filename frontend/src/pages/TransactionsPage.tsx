@@ -9,6 +9,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCategoryMap } from '@/features/categories/queries'
 import { usePaymentMethodMap } from '@/features/paymentMethods/queries'
 import { useToggleSettlement, useTransactions } from '@/features/transactions/queries'
+import { FixedExpenseCarryOverButton } from '@/features/transactions/FixedExpenseCarryOverButton'
 import { TransactionEditDialog } from '@/features/transactions/TransactionEditDialog'
 import { TransactionFilterBar } from '@/features/transactions/TransactionFilterBar'
 import { parseTransactionFilter } from '@/features/transactions/transactionFilter'
@@ -46,11 +47,16 @@ export function TransactionsPage() {
         <CardContent className="grid gap-4 pt-5">
           <div className="flex flex-wrap items-end justify-between gap-3">
             <TransactionFilterBar />
-            {/* 필터를 걸었을 때 그 범위의 건수와 합계를 바로 확인할 수 있게 한다. */}
-            <p className="text-muted-foreground text-sm">
-              {rows.length}건 · 합계{' '}
-              <span className="tabular-amount text-foreground font-medium">{formatKrw(total)}</span>
-            </p>
+            <div className="flex items-center gap-3">
+              {/* 필터를 걸었을 때 그 범위의 건수와 합계를 바로 확인할 수 있게 한다. */}
+              <p className="text-muted-foreground text-sm">
+                {rows.length}건 · 합계{' '}
+                <span className="tabular-amount text-foreground font-medium">
+                  {formatKrw(total)}
+                </span>
+              </p>
+              <FixedExpenseCarryOverButton />
+            </div>
           </div>
 
           <QueryState

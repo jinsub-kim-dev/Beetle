@@ -1,5 +1,6 @@
 package com.example.beetle.application.service
 
+import com.example.beetle.application.port.CarryOverFixedExpensesCommand
 import com.example.beetle.application.port.RegisterTransactionCommand
 import com.example.beetle.application.port.TransactionSearchQuery
 import com.example.beetle.application.port.UpdateTransactionCommand
@@ -7,7 +8,9 @@ import com.example.beetle.domain.exception.DomainStateException
 import com.example.beetle.domain.exception.InvariantViolationException
 import com.example.beetle.domain.exception.ResourceNotFoundException
 import com.example.beetle.domain.model.CategoryId
+import com.example.beetle.domain.model.CategoryType
 import com.example.beetle.domain.model.DateBasis
+import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
@@ -18,6 +21,7 @@ import com.example.beetle.domain.repository.CategoryRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.domain.service.BillDateCalculator
+import com.example.beetle.domain.service.FixedExpenseCarryOver
 import com.example.beetle.fixture.bankAccount
 import com.example.beetle.fixture.cash
 import com.example.beetle.fixture.creditCard
@@ -29,6 +33,8 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import java.time.LocalDate
+import java.time.YearMonth
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatExceptionOfType
 import org.junit.jupiter.api.BeforeEach
@@ -37,7 +43,6 @@ import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import java.time.LocalDate
 
 @DisplayName("TransactionService 유스케이스")
 class TransactionServiceTest {
@@ -52,6 +57,8 @@ class TransactionServiceTest {
         categoryRepository,
         paymentMethodRepository,
         BillDateCalculator(),
+        // 이월 판정은 검증 대상 로직이므로 목이 아닌 실제 구현을 쓴다.
+        FixedExpenseCarryOver(),
     )
 
     private val 식비 = expenseCategory(name = "식비", id = 1L)
@@ -741,6 +748,176 @@ class TransactionServiceTest {
             // when & then
             assertThatExceptionOfType(ResourceNotFoundException::class.java)
                 .isThrownBy { transactionService.delete(TransactionId(99L)) }
+        }
+    }
+
+    @Nested
+    @DisplayName("고정비 이월")
+    inner class CarryOverFixedExpenses {
+
+        private val 구월 = YearMonth.of(2026, 9)
+        private val 십월 = YearMonth.of(2026, 10)
+
+        private fun 고정비카테고리() {
+            every { categoryRepository.findAllByType(CategoryType.EXPENSE) } returns listOf(
+                expenseCategory(name = "월세", nature = ExpenseNature.FIXED, id = 4),
+                expenseCategory(name = "식비", nature = ExpenseNature.VARIABLE, id = 8),
+            )
+        }
+
+        private fun 원본과대상(sources: List<Transaction>, existing: List<Transaction> = emptyList()) {
+            every {
+                transactionRepository.findAllByPeriod(
+                    DateBasis.SPENT, LocalDate.of(2026, 9, 1), LocalDate.of(2026, 9, 30),
+                    null, null, null,
+                )
+            } returns sources
+            every {
+                transactionRepository.findAllByPeriod(
+                    DateBasis.SPENT, LocalDate.of(2026, 10, 1), LocalDate.of(2026, 10, 31),
+                    null, null, null,
+                )
+            } returns existing
+        }
+
+        @Test
+        fun `고정비를 대상 월로 이월하고 청구일을 다시 산출한다`() {
+            // given: 9월 5일 월세(현금) -> 10월 5일
+            고정비카테고리()
+            원본과대상(
+                listOf(
+                    transaction(
+                        categoryId = 4, paymentMethodId = 1, amount = 750_000,
+                        spentDate = LocalDate.of(2026, 9, 5),
+                        billDate = LocalDate.of(2026, 9, 5),
+                        memo = "월세 이체", id = 1,
+                    ),
+                ),
+            )
+            every { paymentMethodRepository.findById(PaymentMethodId(1)) } returns cash(id = 1)
+            val 저장됨 = mutableListOf<Transaction>()
+            every { transactionRepository.save(capture(저장됨)) } answers { 저장됨.last() }
+
+            // when
+            val 결과 = transactionService.carryOverFixedExpenses(
+                CarryOverFixedExpensesCommand(구월, 십월),
+            )
+
+            // then
+            assertThat(결과.created).hasSize(1)
+            assertThat(결과.skippedCount).isZero()
+            val 생성 = 저장됨.single()
+            assertThat(생성.spentDate).isEqualTo(LocalDate.of(2026, 10, 5))
+            // 원본의 청구일(9월)을 복사하지 않는다. 즉시 결제 수단이므로 소비일과 같다
+            assertThat(생성.billDate).isEqualTo(LocalDate.of(2026, 10, 5))
+            assertThat(생성.amount).isEqualTo(Money.of(750_000))
+            assertThat(생성.memo).isEqualTo("월세 이체")
+            // 즉시 결제 수단은 출금 완료로 도출한다 (등록과 같은 규칙)
+            assertThat(생성.isSettled).isTrue()
+        }
+
+        @Test
+        fun `신용카드 고정비는 결제 조건으로 청구일을 산출한다`() {
+            // given: 10월 15일 소비 -> 결제일 14일 카드이므로 11월 14일 청구
+            고정비카테고리()
+            원본과대상(
+                listOf(
+                    transaction(
+                        categoryId = 4, paymentMethodId = 2, amount = 55_000,
+                        spentDate = LocalDate.of(2026, 9, 15),
+                        billDate = LocalDate.of(2026, 10, 14),
+                        id = 1,
+                    ),
+                ),
+            )
+            every { paymentMethodRepository.findById(PaymentMethodId(2)) } returns
+                creditCard(paymentDay = 14, id = 2)
+            val 저장됨 = slot<Transaction>()
+            every { transactionRepository.save(capture(저장됨)) } answers { 저장됨.captured }
+
+            // when
+            transactionService.carryOverFixedExpenses(CarryOverFixedExpensesCommand(구월, 십월))
+
+            // then
+            assertThat(저장됨.captured.spentDate).isEqualTo(LocalDate.of(2026, 10, 15))
+            assertThat(저장됨.captured.billDate).isEqualTo(LocalDate.of(2026, 11, 14))
+            assertThat(저장됨.captured.isSettled).isFalse()
+        }
+
+        @Test
+        fun `이미 있는 고정비는 건너뛰고 개수를 알린다`() {
+            // given: 두 번 눌러도 중복이 생기지 않아야 하고, 왜 안 만들어졌는지 알려야 한다
+            고정비카테고리()
+            원본과대상(
+                sources = listOf(
+                    transaction(categoryId = 4, paymentMethodId = 1, amount = 750_000, id = 1),
+                ),
+                existing = listOf(
+                    transaction(
+                        categoryId = 4, paymentMethodId = 1, amount = 750_000,
+                        spentDate = LocalDate.of(2026, 10, 5),
+                        billDate = LocalDate.of(2026, 10, 5),
+                        id = 9,
+                    ),
+                ),
+            )
+
+            // when
+            val 결과 = transactionService.carryOverFixedExpenses(
+                CarryOverFixedExpensesCommand(구월, 십월),
+            )
+
+            // then
+            assertThat(결과.created).isEmpty()
+            assertThat(결과.skippedCount).isEqualTo(1)
+            verify(exactly = 0) { transactionRepository.save(any()) }
+        }
+
+        @Test
+        fun `변동비는 이월하지 않는다`() {
+            // given: 식비는 매달 금액이 다르므로 대상이 아니다
+            고정비카테고리()
+            원본과대상(
+                listOf(transaction(categoryId = 8, paymentMethodId = 1, amount = 31_000, id = 1)),
+            )
+
+            // when
+            val 결과 = transactionService.carryOverFixedExpenses(
+                CarryOverFixedExpensesCommand(구월, 십월),
+            )
+
+            // then
+            assertThat(결과.created).isEmpty()
+            assertThat(결과.skippedCount).isZero()
+        }
+
+        @Test
+        fun `원본 월과 대상 월이 같으면 거부한다`() {
+            assertThatExceptionOfType(InvariantViolationException::class.java)
+                .isThrownBy {
+                    transactionService.carryOverFixedExpenses(
+                        CarryOverFixedExpensesCommand(구월, 구월),
+                    )
+                }
+                .withMessageContaining("원본 월과 대상 월이 같습니다")
+        }
+
+        @Test
+        fun `이월할 것이 없으면 빈 결과를 반환한다`() {
+            // given
+            고정비카테고리()
+            원본과대상(emptyList())
+
+            // when
+            val 결과 = transactionService.carryOverFixedExpenses(
+                CarryOverFixedExpensesCommand(구월, 십월),
+            )
+
+            // then
+            assertThat(결과.created).isEmpty()
+            assertThat(결과.skippedCount).isZero()
+            assertThat(결과.sourceMonth).isEqualTo(구월)
+            assertThat(결과.targetMonth).isEqualTo(십월)
         }
     }
 }

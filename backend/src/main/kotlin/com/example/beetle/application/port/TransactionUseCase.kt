@@ -7,6 +7,7 @@ import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.Transaction
 import com.example.beetle.domain.model.TransactionId
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 거래 내역 관리 인바운드 포트.
@@ -30,6 +31,17 @@ interface TransactionUseCase {
     fun search(query: TransactionSearchQuery): List<Transaction>
 
     fun delete(id: TransactionId)
+
+    /**
+     * 지난달의 고정비를 지정한 달로 이월한다.
+     *
+     * 매달 같은 금액으로 반복되는 월세·통신비·구독료를 손으로 다시 입력하지 않게 한다.
+     * 기록이 끊기면 전월 대비·이상 감지·반복 지출 점검이 모두 무의미해진다.
+     *
+     * **여러 번 실행해도 중복이 생기지 않는다.** 대상 월에 이미 같은 고정비가 있으면
+     * 건너뛴다.
+     */
+    fun carryOverFixedExpenses(command: CarryOverFixedExpensesCommand): FixedExpenseCarryOverResult
 }
 
 /**
@@ -42,6 +54,31 @@ interface TransactionUseCase {
  *   신용카드는 청구일에 출금되므로 `false` 다. 미래 날짜의 계좌 자동이체처럼
  *   예외가 필요하면 명시적으로 지정한다.
  */
+/**
+ * 고정비 이월 명령.
+ *
+ * @param sourceMonth 원본 월. 보통 대상 월의 직전 달이다
+ * @param targetMonth 이월 대상 월
+ */
+data class CarryOverFixedExpensesCommand(
+    val sourceMonth: YearMonth,
+    val targetMonth: YearMonth,
+)
+
+/**
+ * 고정비 이월 결과.
+ *
+ * @param created 새로 만든 거래
+ * @param skippedCount 대상 월에 이미 있어 건너뛴 항목 수. 사용자가 "왜 다 안 만들어졌나" 를
+ *   알 수 있어야 한다
+ */
+data class FixedExpenseCarryOverResult(
+    val sourceMonth: YearMonth,
+    val targetMonth: YearMonth,
+    val created: List<Transaction>,
+    val skippedCount: Int,
+)
+
 data class RegisterTransactionCommand(
     val categoryId: CategoryId,
     val paymentMethodId: PaymentMethodId,

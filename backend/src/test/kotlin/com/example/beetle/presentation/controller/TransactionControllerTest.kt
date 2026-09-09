@@ -2,6 +2,7 @@ package com.example.beetle.presentation.controller
 
 import com.example.beetle.application.port.RegisterTransactionCommand
 import com.example.beetle.application.port.TransactionSearchQuery
+import com.example.beetle.application.port.FixedExpenseCarryOverResult
 import com.example.beetle.application.port.TransactionUseCase
 import com.example.beetle.application.port.UpdateTransactionCommand
 import com.example.beetle.domain.exception.DomainStateException
@@ -37,6 +38,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers.header
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
 import java.time.LocalDate
+import java.time.YearMonth
 
 @WebMvcTest(TransactionController::class)
 @Import(TransactionControllerTest.MockUseCaseConfiguration::class)
@@ -623,6 +625,65 @@ class TransactionControllerTest {
             // when & then
             mockMvc.perform(delete("/api/transactions/1"))
                 .andExpect(status().isNoContent)
+        }
+    }
+
+    @Nested
+    @DisplayName("POST /api/transactions/fixed-expense-carry-over")
+    inner class CarryOverFixedExpenses {
+
+        @Test
+        fun `이월 결과와 건너뛴 개수를 반환한다`() {
+            // given
+            every { transactionUseCase.carryOverFixedExpenses(any()) } returns
+                FixedExpenseCarryOverResult(
+                    sourceMonth = YearMonth.of(2026, 9),
+                    targetMonth = YearMonth.of(2026, 10),
+                    created = listOf(transaction(amount = 750_000, id = 1L)),
+                    skippedCount = 2,
+                )
+
+            // when & then
+            mockMvc.perform(
+                post("/api/transactions/fixed-expense-carry-over")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"sourceMonth":"2026-09","targetMonth":"2026-10"}"""),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.sourceMonth").value("2026-09"))
+                .andExpect(jsonPath("$.targetMonth").value("2026-10"))
+                .andExpect(jsonPath("$.createdCount").value(1))
+                .andExpect(jsonPath("$.skippedCount").value(2))
+                .andExpect(jsonPath("$.created[0].amount").value(750000))
+        }
+
+        @Test
+        fun `대상 월을 누락하면 400 을 반환한다`() {
+            mockMvc.perform(
+                post("/api/transactions/fixed-expense-carry-over")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"sourceMonth":"2026-09"}"""),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+
+            verify(exactly = 0) { transactionUseCase.carryOverFixedExpenses(any()) }
+        }
+
+        @Test
+        fun `원본과 대상이 같으면 400 을 반환한다`() {
+            // given
+            every { transactionUseCase.carryOverFixedExpenses(any()) } throws
+                InvariantViolationException("원본 월과 대상 월이 같습니다.")
+
+            // when & then
+            mockMvc.perform(
+                post("/api/transactions/fixed-expense-carry-over")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"sourceMonth":"2026-09","targetMonth":"2026-09"}"""),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVARIANT_VIOLATION"))
         }
     }
 

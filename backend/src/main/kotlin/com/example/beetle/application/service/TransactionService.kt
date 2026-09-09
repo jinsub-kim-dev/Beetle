@@ -1,5 +1,7 @@
 package com.example.beetle.application.service
 
+import com.example.beetle.application.port.CarryOverFixedExpensesCommand
+import com.example.beetle.application.port.FixedExpenseCarryOverResult
 import com.example.beetle.application.port.RegisterTransactionCommand
 import com.example.beetle.application.port.TransactionSearchQuery
 import com.example.beetle.application.port.TransactionUseCase
@@ -8,6 +10,8 @@ import com.example.beetle.domain.exception.DomainStateException
 import com.example.beetle.domain.exception.InvariantViolationException
 import com.example.beetle.domain.exception.ResourceNotFoundException
 import com.example.beetle.domain.model.CategoryId
+import com.example.beetle.domain.model.CategoryType
+import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.PaymentMethod
 import com.example.beetle.domain.model.PaymentMethodId
 import com.example.beetle.domain.model.Transaction
@@ -16,6 +20,7 @@ import com.example.beetle.domain.repository.CategoryRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
 import com.example.beetle.domain.repository.TransactionRepository
 import com.example.beetle.domain.service.BillDateCalculator
+import com.example.beetle.domain.service.FixedExpenseCarryOver
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -33,6 +38,7 @@ class TransactionService(
     private val categoryRepository: CategoryRepository,
     private val paymentMethodRepository: PaymentMethodRepository,
     private val billDateCalculator: BillDateCalculator,
+    private val fixedExpenseCarryOver: FixedExpenseCarryOver,
 ) : TransactionUseCase {
 
     @Transactional
@@ -121,6 +127,77 @@ class TransactionService(
             categoryId = query.categoryId,
             paymentMethodId = query.paymentMethodId,
             keyword = query.keyword,
+        )
+    }
+
+    @Transactional
+    override fun carryOverFixedExpenses(
+        command: CarryOverFixedExpensesCommand,
+    ): FixedExpenseCarryOverResult {
+        if (command.sourceMonth == command.targetMonth) {
+            throw InvariantViolationException(
+                "원본 월과 대상 월이 같습니다. 이월할 대상이 없습니다. month=${command.sourceMonth}",
+            )
+        }
+
+        // 고정비 판정은 카테고리의 성격에 달려 있다. 거래는 카테고리를 식별자로만
+        // 참조하므로(CLAUDE.md 4.1) 여기서 조회해 도메인 서비스에 넘긴다.
+        val fixedCategoryIds = categoryRepository.findAllByType(CategoryType.EXPENSE)
+            .filter { it.isFixedExpense }
+            .mapNotNull { it.id }
+            .toSet()
+
+        // 이월은 소비일 기준이다. 고정비는 "매달 이 날 나가는 돈" 이므로 청구일 축으로
+        // 묶으면 카드 결제일에 따라 원본 월이 흔들린다.
+        val sources = transactionRepository.findAllByPeriod(
+            basis = DateBasis.SPENT,
+            from = command.sourceMonth.atDay(1),
+            to = command.sourceMonth.atEndOfMonth(),
+        )
+        val existing = transactionRepository.findAllByPeriod(
+            basis = DateBasis.SPENT,
+            from = command.targetMonth.atDay(1),
+            to = command.targetMonth.atEndOfMonth(),
+        )
+
+        val candidateCount = sources
+            .filter { it.categoryId in fixedCategoryIds }
+            .filterNot { it.isInstallment }
+            .distinctBy { Triple(it.categoryId.value, it.paymentMethodId.value, it.amount.amount) }
+            .size
+
+        val plans = fixedExpenseCarryOver.plan(
+            sources = sources,
+            existing = existing,
+            fixedCategoryIds = fixedCategoryIds,
+            targetMonth = command.targetMonth,
+        )
+
+        val created = plans.map { plan ->
+            val paymentMethod = findPaymentMethod(plan.source.paymentMethodId)
+
+            transactionRepository.save(
+                Transaction.create(
+                    categoryId = plan.source.categoryId,
+                    paymentMethodId = plan.source.paymentMethodId,
+                    amount = plan.source.amount,
+                    spentDate = plan.spentDate,
+                    // 청구일은 새 소비일과 결제 조건으로부터 다시 산출한다.
+                    // 원본의 청구일을 그대로 복사하면 지난달 날짜가 된다.
+                    billDate = billDateCalculator.calculate(paymentMethod, plan.spentDate),
+                    memo = plan.source.memo,
+                    // 등록과 같은 규칙으로 결제 수단에서 도출한다.
+                    isSettled = paymentMethod.isImmediateSettlement,
+                    isExcludedFromStats = plan.source.isExcludedFromStats,
+                ),
+            )
+        }
+
+        return FixedExpenseCarryOverResult(
+            sourceMonth = command.sourceMonth,
+            targetMonth = command.targetMonth,
+            created = created,
+            skippedCount = candidateCount - created.size,
         )
     }
 
