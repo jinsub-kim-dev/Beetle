@@ -87,6 +87,7 @@ class Transaction private constructor(
         if (isSettled) {
             throw DomainStateException("결제 완료된 거래의 금액은 정정할 수 없습니다. id=$id")
         }
+        rejectIfInstallmentPart("금액은")
         return copyWith(amount = newAmount)
     }
 
@@ -108,10 +109,33 @@ class Transaction private constructor(
         if (isSettled) {
             throw DomainStateException("결제 완료된 거래의 일자는 변경할 수 없습니다. id=$id")
         }
+        rejectIfInstallmentPart("일자는")
         return copyWith(spentDate = newSpentDate, billDate = newBillDate)
     }
 
+    /**
+     * 카테고리를 변경한다. 할부 회차에도 허용한다.
+     *
+     * 분류를 고치는 것은 할부 계획의 성질(회차 합계 == 총액, 회차별 청구일)을 깨뜨리지
+     * 않는다. 반면 금액과 일자는 깨뜨리므로 [rejectIfInstallmentPart] 로 막는다.
+     */
     fun changeCategory(newCategoryId: CategoryId): Transaction = copyWith(categoryId = newCategoryId)
+
+    /**
+     * 할부 회차 거래의 금액·일자 변경을 막는다 (PRD 2-④).
+     *
+     * 회차 거래는 할부 계획이 만들어 낸 파생 거래다. 개별 회차의 금액을 바꾸면
+     * "회차 금액의 합 == 총액" 이 깨지고, 일자를 바꾸면 회차별 청구 일정이 어긋난다.
+     * 계획 자체를 바꾸려면 해지하고 다시 등록해야 한다.
+     */
+    private fun rejectIfInstallmentPart(target: String) {
+        if (isInstallment) {
+            throw DomainStateException(
+                "할부 회차 거래의 $target 변경할 수 없습니다. " +
+                    "할부 계획을 해지하고 다시 등록하십시오. id=$id, 회차=$installmentSequence",
+            )
+        }
+    }
 
     /** 영속화 후 부여된 식별자를 반영한 새 인스턴스를 반환한다. */
     fun assignId(assignedId: TransactionId): Transaction = Transaction(

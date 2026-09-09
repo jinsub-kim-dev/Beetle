@@ -4,6 +4,7 @@ import com.example.beetle.application.port.RegisterTransactionCommand
 import com.example.beetle.application.port.TransactionSearchQuery
 import com.example.beetle.application.port.TransactionUseCase
 import com.example.beetle.application.port.UpdateTransactionCommand
+import com.example.beetle.domain.exception.DomainStateException
 import com.example.beetle.domain.exception.InvariantViolationException
 import com.example.beetle.domain.exception.ResourceNotFoundException
 import com.example.beetle.domain.model.CategoryId
@@ -125,7 +126,17 @@ class TransactionService(
 
     @Transactional
     override fun delete(id: TransactionId) {
-        getById(id)
+        val transaction = getById(id)
+
+        // 회차 하나만 지우면 "회차 금액의 합 == 총액" 이 깨진다. 계획 단위로 해지해야 한다
+        // (PRD 2-④). 도메인 모델은 자신의 삭제를 막을 수 없으므로 여기서 판단한다.
+        if (transaction.isInstallment) {
+            throw DomainStateException(
+                "할부 회차 거래는 개별 삭제할 수 없습니다. 할부 계획을 해지하십시오. " +
+                    "id=$id, 회차=${transaction.installmentSequence}",
+            )
+        }
+
         transactionRepository.deleteById(id)
     }
 

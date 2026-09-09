@@ -22,6 +22,7 @@ import com.example.beetle.fixture.bankAccount
 import com.example.beetle.fixture.cash
 import com.example.beetle.fixture.creditCard
 import com.example.beetle.fixture.expenseCategory
+import com.example.beetle.fixture.installmentTransaction
 import com.example.beetle.fixture.transaction
 import io.mockk.confirmVerified
 import io.mockk.every
@@ -715,6 +716,21 @@ class TransactionServiceTest {
 
             // then
             verify(exactly = 1) { transactionRepository.deleteById(TransactionId(1L)) }
+        }
+
+        @Test
+        fun `할부 회차 거래는 개별 삭제할 수 없다`() {
+            // given: 회차 하나만 지우면 "회차 금액의 합 == 총액" 이 깨진다.
+            // 계획 단위로 해지해야 한다
+            every { transactionRepository.findById(TransactionId(5L)) } returns
+                installmentTransaction(sequence = 2, id = 5L)
+
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy { transactionService.delete(TransactionId(5L)) }
+                .withMessageContaining("할부 계획을 해지하십시오")
+
+            verify(exactly = 0) { transactionRepository.deleteById(TransactionId(5L)) }
         }
 
         @Test

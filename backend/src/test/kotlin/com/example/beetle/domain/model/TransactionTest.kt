@@ -506,4 +506,69 @@ class TransactionTest {
                 }
         }
     }
+
+    @Nested
+    @DisplayName("할부 회차 거래의 보호")
+    inner class InstallmentPartProtection {
+
+        private val 회차거래 = installmentTransaction(sequence = 2, id = 10L)
+
+        @Test
+        fun `금액을 정정할 수 없다`() {
+            // given: 회차 금액을 바꾸면 "회차 금액의 합 == 총액" 이 깨진다
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy { 회차거래.correctAmount(Money.of(200_000)) }
+                .withMessageContaining("할부 회차 거래의 금액은 변경할 수 없습니다")
+        }
+
+        @Test
+        fun `일자를 변경할 수 없다`() {
+            // given: 일자를 바꾸면 회차별 청구 일정이 어긋난다
+            // when & then
+            assertThatExceptionOfType(DomainStateException::class.java)
+                .isThrownBy {
+                    회차거래.reschedule(
+                        newSpentDate = LocalDate.of(2026, 2, 1),
+                        newBillDate = LocalDate.of(2026, 3, 14),
+                    )
+                }
+                .withMessageContaining("할부 회차 거래의 일자는 변경할 수 없습니다")
+        }
+
+        @Test
+        fun `카테고리는 변경할 수 있다`() {
+            // 분류를 고치는 것은 계획의 성질을 깨뜨리지 않는다
+            val 변경됨 = 회차거래.changeCategory(CategoryId(9))
+
+            assertThat(변경됨.categoryId).isEqualTo(CategoryId(9))
+            assertThat(변경됨.installmentSequence).isEqualTo(2)
+        }
+
+        @Test
+        fun `메모는 변경할 수 있다`() {
+            assertThat(회차거래.changeMemo("냉장고 2회차").memo).isEqualTo("냉장고 2회차")
+        }
+
+        @Test
+        fun `정산 표시는 회차별로 할 수 있다`() {
+            // 회차마다 청구일이 다르므로 정산도 회차 단위다
+            assertThat(회차거래.settle().isSettled).isTrue()
+        }
+
+        @Test
+        fun `할부가 아닌 거래는 금액과 일자를 정정할 수 있다`() {
+            // given
+            val 일반거래 = transaction(amount = 10_000, id = 1L)
+
+            // when & then
+            assertThat(일반거래.correctAmount(Money.of(12_000)).amount).isEqualTo(Money.of(12_000))
+            assertThat(
+                일반거래.reschedule(
+                    newSpentDate = LocalDate.of(2026, 1, 20),
+                    newBillDate = LocalDate.of(2026, 2, 14),
+                ).spentDate,
+            ).isEqualTo(LocalDate.of(2026, 1, 20))
+        }
+    }
 }

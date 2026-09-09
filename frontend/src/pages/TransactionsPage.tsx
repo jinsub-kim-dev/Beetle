@@ -1,3 +1,5 @@
+import { Pencil } from 'lucide-react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AmountText } from '@/components/common/AmountText'
 import { QueryState } from '@/components/common/QueryState'
@@ -7,10 +9,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCategoryMap } from '@/features/categories/queries'
 import { usePaymentMethodMap } from '@/features/paymentMethods/queries'
 import { useToggleSettlement, useTransactions } from '@/features/transactions/queries'
+import { TransactionEditDialog } from '@/features/transactions/TransactionEditDialog'
 import { TransactionFilterBar } from '@/features/transactions/TransactionFilterBar'
 import { parseTransactionFilter } from '@/features/transactions/transactionFilter'
 import { formatDate, formatKrw } from '@/lib/format'
 import { usePeriodParams } from '@/store/periodStore'
+import type { Transaction } from '@/types/domain'
 
 /**
  * 거래 내역: 기간 필터와 목록.
@@ -27,6 +31,9 @@ export function TransactionsPage() {
   const categories = useCategoryMap()
   const paymentMethods = usePaymentMethodMap()
   const toggleSettlement = useToggleSettlement()
+
+  // 수정 대상은 이 화면 안에서만 쓰이므로 지역 상태로 둔다.
+  const [editing, setEditing] = useState<Transaction | null>(null)
 
   const rows = transactions.data ?? []
   const total = rows.reduce((sum, transaction) => sum + transaction.amount, 0)
@@ -62,7 +69,8 @@ export function TransactionsPage() {
                     <th className="py-2 pr-3 font-medium">결제 수단</th>
                     <th className="py-2 pr-3 font-medium">메모</th>
                     <th className="py-2 pr-3 text-right font-medium">금액</th>
-                    <th className="py-2 text-right font-medium">출금</th>
+                    <th className="py-2 pr-3 text-right font-medium">출금</th>
+                    <th className="py-2 text-right font-medium">수정</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y">
@@ -96,7 +104,7 @@ export function TransactionsPage() {
                       <td className="py-2 pr-3 text-right">
                         <AmountText amount={transaction.amount} />
                       </td>
-                      <td className="py-2 text-right">
+                      <td className="py-2 pr-3 text-right">
                         <Button
                           variant={transaction.settled ? 'secondary' : 'outline'}
                           size="sm"
@@ -111,6 +119,16 @@ export function TransactionsPage() {
                           {transaction.settled ? '완료' : '표시'}
                         </Button>
                       </td>
+                      <td className="py-2 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          aria-label={`${formatDate(transaction.spentDate)} ${formatKrw(transaction.amount)} 거래 수정`}
+                          onClick={() => setEditing(transaction)}
+                        >
+                          <Pencil />
+                        </Button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -119,6 +137,8 @@ export function TransactionsPage() {
           </QueryState>
         </CardContent>
       </Card>
+
+      <TransactionEditDialog transaction={editing} onClose={() => setEditing(null)} />
     </div>
   )
 }

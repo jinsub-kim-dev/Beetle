@@ -588,6 +588,34 @@ class TransactionControllerTest {
         }
 
         @Test
+        fun `할부 회차 거래 삭제는 409 를 반환한다`() {
+            // given: 화면은 이 code 로 분기해 "할부 계획을 해지하십시오" 를 안내한다
+            every { transactionUseCase.delete(TransactionId(5L)) } throws
+                DomainStateException("할부 회차 거래는 개별 삭제할 수 없습니다. 할부 계획을 해지하십시오.")
+
+            // when & then
+            mockMvc.perform(delete("/api/transactions/5"))
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.code").value("DOMAIN_STATE_CONFLICT"))
+        }
+
+        @Test
+        fun `할부 회차 거래 금액 수정은 409 를 반환한다`() {
+            // given
+            every { transactionUseCase.update(any()) } throws
+                DomainStateException("할부 회차 거래의 금액은 변경할 수 없습니다.")
+
+            // when & then
+            mockMvc.perform(
+                patch("/api/transactions/5")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content("""{"amount":200000}"""),
+            )
+                .andExpect(status().isConflict)
+                .andExpect(jsonPath("$.code").value("DOMAIN_STATE_CONFLICT"))
+        }
+
+        @Test
         fun `삭제하면 204 를 반환한다`() {
             // given
             every { transactionUseCase.delete(TransactionId(1L)) } returns Unit
