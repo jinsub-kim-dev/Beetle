@@ -2,8 +2,10 @@
  * 백엔드 요청/응답 DTO 타입.
  */
 import type {
+  BudgetStatus,
   CategoryType,
   ComparisonBaseline,
+  DayOfWeekName,
   DateBasis,
   ExpenseNature,
   IsoDate,
@@ -259,6 +261,120 @@ export interface CategoryAnomalyReport {
     minimumIncreaseAmount: number
   }
   anomalies: CategoryAnomalyItem[]
+}
+
+// --- 예산 ---
+
+export interface RegisterBudgetRequest {
+  categoryId: number
+  yearMonth: YearMonthString
+  amount: number
+}
+
+export interface UpdateBudgetRequest {
+  amount: number
+}
+
+export interface Budget {
+  id: number
+  categoryId: number
+  yearMonth: YearMonthString
+  amount: number
+}
+
+/** 예산 하나의 실적. 소진율은 100% 를 넘을 수 있다. */
+export interface BudgetPerformanceSummary {
+  budget: number
+  spent: number
+  /** 남은 예산. 초과하면 음수다. */
+  remaining: number
+  usagePercentage: number
+  /** 초과 금액. 초과하지 않았으면 0원이다. */
+  overspending: number
+  status: BudgetStatus
+}
+
+export interface CategoryBudgetPerformance {
+  budgetId: number
+  categoryId: number
+  categoryName: string
+  nature?: ExpenseNature
+  performance: BudgetPerformanceSummary
+}
+
+/**
+ * 예산 대비 실적.
+ *
+ * `total` 이 없으면 **예산 미설정**이다. 0% 소진으로 표시하면 정반대로 읽힌다.
+ */
+export interface BudgetPerformanceReport {
+  basis: DateBasis
+  month: YearMonthString
+  warningThresholdPercentage: number
+  total?: BudgetPerformanceSummary
+  /** 예산을 정하지 않은 카테고리의 지출 합계. */
+  unbudgetedSpending: number
+  items: CategoryBudgetPerformance[]
+}
+
+// --- 반복 지출 (구독 점검) ---
+
+export interface RecurringExpenseItem {
+  categoryId: number
+  categoryName: string
+  nature: ExpenseNature
+  paymentMethodId: number
+  paymentMethodName: string
+  /** 매달 같은 금액이라는 것이 반복 지출의 판단 조건이다. */
+  monthlyAmount: number
+  monthsPresent: number
+  lastSeenMonth: YearMonthString
+  /** 지금도 나가고 있는지 여부. 직전 달까지 등장했으면 진행 중이다. */
+  active: boolean
+  /** 연간 환산액. 해지 판단의 근거가 되는 숫자다. */
+  annualEstimate: number
+}
+
+export interface RecurringExpenseReport {
+  basis: DateBasis
+  from: YearMonthString
+  to: YearMonthString
+  /** 반복으로 인정한 최소 등장 월 수. */
+  minimumMonths: number
+  /** 진행 중인 항목만의 월 합계. 끊긴 구독은 더하지 않는다. */
+  activeMonthlyTotal: number
+  activeAnnualTotal: number
+  items: RecurringExpenseItem[]
+}
+
+// --- 시간 축 소비 패턴 ---
+
+export interface WeekdaySpending {
+  dayOfWeek: DayOfWeekName
+  total: number
+  /** 조회 구간에서 이 요일이 등장한 횟수. 평균의 분모다. */
+  occurrences: number
+  /** 요일 간 비교는 합계가 아니라 이 값으로 한다. */
+  average: number
+  sharePercentage: number
+  transactionCount: number
+}
+
+export interface DailySpending {
+  date: IsoDate
+  total: number
+  /** 구간 시작일부터 이 날까지의 누적. */
+  cumulative: number
+  transactionCount: number
+}
+
+export interface SpendingPattern {
+  basis: DateBasis
+  from: IsoDate
+  to: IsoDate
+  /** 월요일부터 일요일까지 일곱 개가 모두 채워져 온다. */
+  weekdays: WeekdaySpending[]
+  daily: DailySpending[]
 }
 
 export type { ComparisonBaseline }

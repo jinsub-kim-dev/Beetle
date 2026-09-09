@@ -30,6 +30,19 @@ export type DateBasis = 'SPENT' | 'BILL'
  */
 export type ComparisonBaseline = 'PREVIOUS_MONTH' | 'SAME_MONTH_LAST_YEAR'
 
+/** 예산 소진 상태. 경고 기준은 서버가 응답에 함께 담아 준다. */
+export type BudgetStatus = 'WITHIN' | 'WARNING' | 'EXCEEDED'
+
+/** 요일. 서버는 월요일부터 일요일까지 일곱 개를 모두 채워 보낸다. */
+export type DayOfWeekName =
+  | 'MONDAY'
+  | 'TUESDAY'
+  | 'WEDNESDAY'
+  | 'THURSDAY'
+  | 'FRIDAY'
+  | 'SATURDAY'
+  | 'SUNDAY'
+
 /** `yyyy-MM-dd` 형식의 날짜 문자열. */
 export type IsoDate = string
 

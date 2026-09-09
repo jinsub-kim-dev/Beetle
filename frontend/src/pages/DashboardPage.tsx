@@ -14,6 +14,7 @@ import {
   usePeriodSummary,
   useUpcomingBills,
 } from '@/features/analytics/queries'
+import { BudgetProgressCard } from '@/features/budgets/BudgetProgressCard'
 import { useTransactions } from '@/features/transactions/queries'
 import { useCategoryMap } from '@/features/categories/queries'
 import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
@@ -175,6 +176,8 @@ export function DashboardPage() {
           </CardContent>
         </Card>
       )}
+
+      <BudgetProgressCard basis={params.basis} yearMonth={yearMonth} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>

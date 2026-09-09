@@ -31,6 +31,8 @@ import {
 } from '@/features/analytics/queries'
 import { useInstallmentPlans } from '@/features/installments/queries'
 import { MonthComparisonPanel } from '@/features/analytics/MonthComparisonPanel'
+import { RecurringExpensePanel } from '@/features/analytics/RecurringExpensePanel'
+import { SpendingPatternPanel } from '@/features/analytics/SpendingPatternPanel'
 import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
 import { formatKrw, formatKrwCompact, formatPercentage, formatYearMonth } from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
@@ -72,6 +74,10 @@ export function AnalyticsPage() {
       <PeriodSelector />
 
       <MonthComparisonPanel basis={basis} yearMonth={yearMonth} />
+
+      <SpendingPatternPanel params={params} />
+
+      <RecurringExpensePanel basis={basis} yearMonth={yearMonth} />
 
       <Card>
         <CardHeader>

@@ -55,8 +55,8 @@ com.example.beetle
 ## 4. DDD 전술 설계 규칙
 
 ### 4.1 애그리거트 경계
-- 애그리거트 루트는 `Category`, `PaymentMethod`, `Transaction`, `InstallmentPlan` **4개이며 각각
-  독립 애그리거트**입니다.
+- 애그리거트 루트는 `Category`, `PaymentMethod`, `Transaction`, `InstallmentPlan`, `Budget`
+  **5개이며 각각 독립 애그리거트**입니다.
 - **애그리거트 간 참조는 반드시 식별자(ID)로만 합니다.** 도메인 모델에 객체 참조나 JPA 연관관계를
   두지 않습니다.
   - `Transaction`은 `category: Category`가 아니라 `categoryId: CategoryId`를 가집니다.
@@ -108,6 +108,9 @@ com.example.beetle
   즉시 결제 수단은 `true`, 신용카드는 `false`. 도출을 위해 명령 객체의 필드는 nullable 이며,
   `false` 는 "미정산 명시" 로 해석한다 (PRD 2-①)
 - `InstallmentPlan`: `installmentMonths >= 2`, 회차별 금액의 합계 == `totalAmount`
+- `Budget`: `amount > 0`. 0원 예산은 "예산을 두지 않음" 과 구분되지 않는다 (PRD 2-⑥).
+  "지출 카테고리에만 예산을 둔다" 는 규칙은 다른 애그리거트의 상태에 의존하므로 애그리거트가
+  아니라 애플리케이션 서비스가 검증한다 (4.4 예외)
 
 ### 4.4 비즈니스 로직의 위치 (애너믹 도메인 모델 금지)
 - **규칙과 계산은 `domain`에 둡니다.** `application/service`는 오케스트레이션(리포지토리 호출,
@@ -116,6 +119,11 @@ com.example.beetle
 - 특정 애그리거트 하나에 속하지 않는 규칙은 `domain/service`의 **도메인 서비스**(순수 클래스)로 둡니다.
   - `BillDateCalculator`: `PaymentMethod` + `spentDate` → `billDate` 산출
   - `InstallmentScheduler`: 총금액·개월 수 → 회차별 금액과 청구일 분할
+  - `SpendingAnomalyDetector`: 월별 카테고리 지출 → 평소보다 튄 항목 판정 (PRD 3.1)
+  - `RecurringExpenseDetector`: 반복 후보 → 구독 여부 판정과 연간 환산 (PRD 3.3)
+  - `SpendingPatternAnalyzer`: 요일·일별 집계 → 요일 평균과 일별 누적 (PRD 3.4)
+- **판정 기준값(임계치)은 도메인 서비스가 갖고, 응답에 함께 담아 화면이 설명할 수 있게 합니다.**
+  기준이 화면과 서버 두 곳에 있으면 반드시 어긋납니다.
 - 도메인 모델이 getter/setter만 가진 상태가 되면 설계가 잘못된 신호입니다.
 
 ### 4.5 유비쿼터스 언어
@@ -160,6 +168,10 @@ com.example.beetle
 - **카테고리:** `INCOME`/`TRANSFER`에 `nature`를 지정한 입력의 거부
 - **통계 집계:** `isExcludedFromStats = true` 항목이 모든 집계에서 제외되는지,
   소비일 기준과 청구일 기준 결과가 실제로 달라지는 데이터셋에서의 각 기준별 정확성
+- **판정 임계치:** 경계값의 양쪽(기준 미달·기준 충족)과 기준값 자체. 예산 상태는 79,999원 /
+  80,000원 / 100,000원 / 100,001원 처럼 상태가 바뀌는 지점을 전부 검증한다
+- **요일 매핑:** MySQL 의 `DAYOFWEEK` 은 일요일이 1, `java.time.DayOfWeek` 은 월요일이 1이다.
+  변환이 어긋나면 "주말에 몰린다" 는 결론이 반대로 나오므로 실제 MySQL 로 검증한다
 - **금액:** 0원 및 음수 거부, 원 단위 정수 처리(부동소수점 사용 금지)
 
 ### 5.4 테스트 작성 규칙
@@ -186,6 +198,8 @@ com.example.beetle
   결제 수단 및 결제일 관리. 카드별 지출 점유율 통계의 기준.
 - **InstallmentPlan (할부 계획):** 대형 지출 할부 관리 (총금액, 총 개월 수, 월 납부액 분할).
   등록 시 회차 수만큼의 `Transaction`을 각 회차 청구일로 생성하여 예산 통계 왜곡을 방지.
+- **Budget (예산):** 카테고리별 월 예산. 카테고리 하나의 한 달 예산은 하나뿐이며 지출
+  카테고리만 대상. 소진율·잔액·상태는 `BudgetPerformance` 값 객체가 파생시킨다 (PRD 2-⑥, 3.2).
 
 ---
 

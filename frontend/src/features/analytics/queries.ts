@@ -78,3 +78,23 @@ export function useCategoryAnomalies(
     queryFn: () => statisticsApi.categoryAnomalies(basis, month, baselineMonths),
   })
 }
+
+/** 매달 반복되는 지출(구독·정기 결제) 점검. */
+export function useRecurringExpenses(
+  basis: DateBasis,
+  month: YearMonthString,
+  windowMonths?: number,
+) {
+  return useQuery({
+    queryKey: queryKeys.statistics.recurringExpenses(basis, month, windowMonths),
+    queryFn: () => statisticsApi.recurringExpenses(basis, month, windowMonths),
+  })
+}
+
+/** 요일별 평균과 일별 누적. "언제 쓰는가" 를 본다. */
+export function useSpendingPattern(params: PeriodParams) {
+  return useQuery({
+    queryKey: queryKeys.statistics.spendingPattern(params),
+    queryFn: () => statisticsApi.spendingPattern(params),
+  })
+}

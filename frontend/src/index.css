@@ -34,6 +34,8 @@
   --variable-expense: oklch(0.6 0.14 180);
   /* 수지(흑자·적자 흐름). 수입/지출과 구분되는 색이어야 한다 */
   --balance: oklch(0.5 0.16 300);
+  /* 예산 경고. 초과(지출 색)와 여유(수입 색) 사이의 중간 상태다 */
+  --warning: oklch(0.68 0.16 70);
 }
 
 .dark {
@@ -56,6 +58,7 @@
   --border: oklch(0.31 0.01 260);
   --input: oklch(0.31 0.01 260);
   --ring: oklch(0.68 0.16 264);
+  --warning: oklch(0.75 0.15 70);
 }
 
 @theme inline {
@@ -85,6 +88,7 @@
   --color-fixed-expense: var(--fixed-expense);
   --color-variable-expense: var(--variable-expense);
   --color-balance: var(--balance);
+  --color-warning: var(--warning);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

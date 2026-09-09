@@ -52,6 +52,16 @@ export const queryKeys = {
       ['statistics', 'monthComparison', basis, month, baseline] as const,
     categoryAnomalies: (basis: DateBasis, month: YearMonthString, baselineMonths?: number) =>
       ['statistics', 'categoryAnomalies', basis, month, baselineMonths ?? 'DEFAULT'] as const,
+    recurringExpenses: (basis: DateBasis, month: YearMonthString, windowMonths?: number) =>
+      ['statistics', 'recurringExpenses', basis, month, windowMonths ?? 'DEFAULT'] as const,
+    spendingPattern: (params: PeriodParams) => ['statistics', 'spendingPattern', params] as const,
+  },
+
+  budgets: {
+    all: ['budgets'] as const,
+    list: (month: YearMonthString) => ['budgets', 'list', month] as const,
+    performance: (basis: DateBasis, month: YearMonthString) =>
+      ['budgets', 'performance', basis, month] as const,
   },
 } as const
 
@@ -60,6 +70,8 @@ export const transactionAffectedKeys = [
   queryKeys.transactions.all,
   queryKeys.statistics.all,
   queryKeys.installmentPlans.all,
+  // 예산 실적은 실제 지출을 분자로 쓰므로 거래가 바뀌면 함께 낡는다.
+  queryKeys.budgets.all,
 ] as const
 
 export type PeriodQueryParams = { basis: DateBasis; from: IsoDate; to: IsoDate }

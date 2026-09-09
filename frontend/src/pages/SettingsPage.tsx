@@ -2,6 +2,7 @@ import { Plus } from 'lucide-react'
 import { QueryState } from '@/components/common/QueryState'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { BudgetSection } from '@/features/budgets/BudgetSection'
 import { useCategories } from '@/features/categories/queries'
 import { PaymentMethodFormDialog } from '@/features/paymentMethods/PaymentMethodFormDialog'
 import { usePaymentMethods } from '@/features/paymentMethods/queries'
@@ -107,6 +108,11 @@ export function SettingsPage() {
           </QueryState>
         </CardContent>
       </Card>
+
+      {/* 예산은 카테고리·결제 수단과 성격이 달라(달마다 값이 바뀜) 별도 카드로 둔다. */}
+      <div className="lg:col-span-2">
+        <BudgetSection />
+      </div>
 
       {/* 이 화면에서만 열리므로 레이아웃이 아닌 여기에 마운트한다. */}
       <PaymentMethodFormDialog />

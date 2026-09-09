@@ -1,6 +1,8 @@
 import { apiClient } from './client'
 import type {
   CategoryAnomalyReport,
+  RecurringExpenseReport,
+  SpendingPattern,
   CategoryBreakdown,
   ExpenseNatureBreakdown,
   MonthComparison,
@@ -98,6 +100,31 @@ export const statisticsApi = {
       `${BASE_PATH}/category-anomalies`,
       { params: baselineMonths === undefined ? { basis, month } : { basis, month, baselineMonths } },
     )
+    return data
+  },
+
+  /**
+   * 반복 지출(구독·정기 결제) 점검.
+   *
+   * `windowMonths` 를 생략하면 서버 기본값(6개월)이 적용된다.
+   */
+  async recurringExpenses(
+    basis: DateBasis,
+    month: YearMonthString,
+    windowMonths?: number,
+  ): Promise<RecurringExpenseReport> {
+    const { data } = await apiClient.get<RecurringExpenseReport>(
+      `${BASE_PATH}/recurring-expenses`,
+      { params: { basis, month, windowMonths } },
+    )
+    return data
+  },
+
+  /** 요일별 평균과 일별 누적. */
+  async spendingPattern(params: PeriodParams): Promise<SpendingPattern> {
+    const { data } = await apiClient.get<SpendingPattern>(`${BASE_PATH}/spending-pattern`, {
+      params,
+    })
     return data
   },
 }
