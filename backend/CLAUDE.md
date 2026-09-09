@@ -108,6 +108,10 @@ com.example.beetle
   즉시 결제 수단은 `true`, 신용카드는 `false`. 도출을 위해 명령 객체의 필드는 nullable 이며,
   `false` 는 "미정산 명시" 로 해석한다 (PRD 2-①)
 - `InstallmentPlan`: `installmentMonths >= 2`, 회차별 금액의 합계 == `totalAmount`
+- `Transaction` (할부 회차): 회차 거래의 **금액과 일자는 변경할 수 없다** (PRD 2-④).
+  회차 금액을 바꾸면 "회차 합계 == 총액" 이 깨지고, 일자를 바꾸면 청구 일정이 어긋난다.
+  카테고리·메모·정산 표시는 허용한다. 개별 삭제는 애그리거트가 막을 수 없으므로
+  애플리케이션 서비스가 거부한다
 - `Budget`: `amount > 0`. 0원 예산은 "예산을 두지 않음" 과 구분되지 않는다 (PRD 2-⑥).
   "지출 카테고리에만 예산을 둔다" 는 규칙은 다른 애그리거트의 상태에 의존하므로 애그리거트가
   아니라 애플리케이션 서비스가 검증한다 (4.4 예외)
@@ -122,6 +126,7 @@ com.example.beetle
   - `SpendingAnomalyDetector`: 월별 카테고리 지출 → 평소보다 튄 항목 판정 (PRD 3.1)
   - `RecurringExpenseDetector`: 반복 후보 → 구독 여부 판정과 연간 환산 (PRD 3.3)
   - `SpendingPatternAnalyzer`: 요일·일별 집계 → 요일 평균과 일별 누적 (PRD 3.4)
+  - `FixedExpenseCarryOver`: 원본 월의 거래 → 이월 대상과 새 소비일 (PRD 2-⑦)
 - **판정 기준값(임계치)은 도메인 서비스가 갖고, 응답에 함께 담아 화면이 설명할 수 있게 합니다.**
   기준이 화면과 서버 두 곳에 있으면 반드시 어긋납니다.
 - 도메인 모델이 getter/setter만 가진 상태가 되면 설계가 잘못된 신호입니다.

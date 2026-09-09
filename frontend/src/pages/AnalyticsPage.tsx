@@ -1,3 +1,5 @@
+import { Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Bar,
@@ -17,6 +19,7 @@ import {
 import { AmountText } from '@/components/common/AmountText'
 import { QueryState } from '@/components/common/QueryState'
 import { PeriodSelector } from '@/components/layout/PeriodSelector'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   categorySlices,
@@ -29,6 +32,8 @@ import {
   useMonthlyTrend,
   usePaymentMethodBreakdown,
 } from '@/features/analytics/queries'
+import { CancelInstallmentDialog } from '@/features/installments/CancelInstallmentDialog'
+import { InstallmentFormDialog } from '@/features/installments/InstallmentFormDialog'
 import { useInstallmentPlans } from '@/features/installments/queries'
 import { MonthComparisonPanel } from '@/features/analytics/MonthComparisonPanel'
 import { RecurringExpensePanel } from '@/features/analytics/RecurringExpensePanel'
@@ -37,6 +42,8 @@ import { buildTransactionsPath } from '@/features/transactions/transactionFilter
 import { formatKrw, formatKrwCompact, formatPercentage, formatYearMonth } from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
 import { usePeriodParams, usePeriodStore } from '@/store/periodStore'
+import { useUiStore } from '@/store/uiStore'
+import type { InstallmentPlan } from '@/types/domain'
 
 const SLICE_COLORS = [
   'oklch(0.55 0.17 250)',
@@ -62,6 +69,9 @@ export function AnalyticsPage() {
   const byCategory = useCategoryBreakdown(params, 'EXPENSE')
   const byPaymentMethod = usePaymentMethodBreakdown(params)
   const plans = useInstallmentPlans()
+  const openInstallmentForm = useUiStore((state) => state.openInstallmentForm)
+
+  const [cancelling, setCancelling] = useState<InstallmentPlan | null>(null)
 
   const trendSeries = toTrendSeries(trend.data ?? [])
   const categoryData = byCategory.data ? categorySlices(byCategory.data.items) : []
@@ -148,8 +158,12 @@ export function AnalyticsPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex-row items-start justify-between gap-3">
           <CardTitle>할부 현황</CardTitle>
+          <Button size="sm" variant="outline" onClick={openInstallmentForm}>
+            <Plus />
+            할부 등록
+          </Button>
         </CardHeader>
         <CardContent>
           <QueryState
@@ -160,21 +174,35 @@ export function AnalyticsPage() {
           >
             <ul className="divide-y">
               {(plans.data ?? []).map((plan) => (
-                <li key={plan.id} className="flex items-center justify-between py-2.5">
-                  <div>
-                    <p className="text-sm font-medium">{plan.merchant}</p>
+                <li key={plan.id} className="flex items-center justify-between gap-2 py-2.5">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{plan.merchant}</p>
                     <p className="text-muted-foreground text-xs">
                       {formatYearMonth(plan.spentDate.slice(0, 7))} 발생 · {plan.installmentMonths}
                       개월 · 월 {formatKrw(plan.monthlyAmount)}
                     </p>
                   </div>
-                  <AmountText amount={plan.totalAmount} className="text-sm" />
+                  <div className="flex shrink-0 items-center gap-1">
+                    <AmountText amount={plan.totalAmount} className="text-sm" />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label={`${plan.merchant} 할부 해지`}
+                      onClick={() => setCancelling(plan)}
+                    >
+                      <Trash2 />
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
           </QueryState>
         </CardContent>
       </Card>
+
+      <InstallmentFormDialog />
+
+      <CancelInstallmentDialog plan={cancelling} onClose={() => setCancelling(null)} />
     </div>
   )
 }

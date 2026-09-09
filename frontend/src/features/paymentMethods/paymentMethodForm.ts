@@ -1,8 +1,11 @@
-import type { RegisterPaymentMethodRequest } from '@/types/api'
-import type { PaymentMethodType } from '@/types/domain'
+import type {
+  RegisterPaymentMethodRequest,
+  UpdatePaymentMethodRequest,
+} from '@/types/api'
+import type { PaymentMethod, PaymentMethodType } from '@/types/domain'
 
 /**
- * 결제 수단 등록 폼의 순수 로직.
+ * 결제 수단 등록·수정 폼의 순수 로직.
  *
  * 폼 상태는 전부 문자열로 다루고 전송 직전에 요청 객체로 변환한다 (CLAUDE.md 5.1).
  */
@@ -157,4 +160,53 @@ export function toFormErrors(
   })
 
   return errors
+}
+
+/** 결제 수단을 폼 값으로 옮긴다. 수정 모드에서 쓴다. */
+export function toFormValues(paymentMethod: PaymentMethod): PaymentMethodFormValues {
+  return {
+    name: paymentMethod.name,
+    type: paymentMethod.type,
+    paymentDay: paymentMethod.paymentDay === undefined ? '' : String(paymentMethod.paymentDay),
+    closingDay: paymentMethod.closingDay === undefined ? '' : String(paymentMethod.closingDay),
+  }
+}
+
+/**
+ * 수정 요청으로 변환한다. 바뀐 필드만 담는다.
+ *
+ * **종류는 담지 않는다.** 청구일 산출 방식이 바뀌면 이미 기록된 거래의 청구일이
+ * 설명되지 않으므로 서버가 수정 대상으로 받지 않는다.
+ *
+ * 마감일을 비운 경우는 "값을 보내지 않음" 과 구분해야 하므로 `clearClosingDay` 를 쓴다.
+ * 마감일 미설정은 "익월 결제" 라는 의미를 갖는 상태다.
+ */
+export function toUpdatePaymentMethodRequest(
+  values: PaymentMethodFormValues,
+  original: PaymentMethod,
+): UpdatePaymentMethodRequest {
+  const request: UpdatePaymentMethodRequest = {}
+
+  const name = values.name.trim()
+  if (name !== original.name) request.name = name
+
+  if (!hasBillingCycle(original.type)) return request
+
+  const paymentDay = parseDayInput(values.paymentDay)
+  if (paymentDay !== null && paymentDay !== original.paymentDay) {
+    request.paymentDay = paymentDay
+  }
+
+  const closingDay = parseDayInput(values.closingDay)
+  if (closingDay === null && original.closingDay !== undefined) {
+    request.clearClosingDay = true
+  } else if (closingDay !== null && closingDay !== original.closingDay) {
+    request.closingDay = closingDay
+  }
+
+  return request
+}
+
+export function hasChanges(request: UpdatePaymentMethodRequest): boolean {
+  return Object.keys(request).length > 0
 }

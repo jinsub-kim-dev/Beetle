@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type { PaymentMethod } from '@/types/domain'
 import {
   hasBillingCycle,
+  hasChanges,
   hasErrors,
   initialPaymentMethodFormValues,
   MAX_DAY_OF_MONTH,
@@ -8,7 +10,9 @@ import {
   parseDayInput,
   PAYMENT_METHOD_TYPE_OPTIONS,
   toFormErrors,
+  toFormValues,
   toRegisterPaymentMethodRequest,
+  toUpdatePaymentMethodRequest,
   validatePaymentMethodForm,
   type PaymentMethodFormValues,
 } from './paymentMethodForm'
@@ -217,4 +221,121 @@ describe('paymentMethodForm - 결제 수단 등록 폼 로직', () => {
       expect(toFormErrors(undefined)).toEqual({})
     })
   })
+
+describe('수정 요청 변환', () => {
+  function 결제수단(overrides: Partial<PaymentMethod> = {}): PaymentMethod {
+    return {
+      id: 2,
+      name: '삼성카드',
+      type: 'CREDIT_CARD',
+      paymentDay: 14,
+      immediateSettlement: false,
+      ...overrides,
+    }
+  }
+
+  it('결제 수단을 폼 값으로 옮긴다', () => {
+    expect(toFormValues(결제수단({ closingDay: 25 }))).toEqual({
+      name: '삼성카드',
+      type: 'CREDIT_CARD',
+      paymentDay: '14',
+      closingDay: '25',
+    })
+  })
+
+  it('마감일이 없으면 빈 문자열이다', () => {
+    expect(toFormValues(결제수단()).closingDay).toBe('')
+  })
+
+  it('바뀐 이름만 담는다', () => {
+    const original = 결제수단()
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), name: '삼성카드(구)' },
+      original,
+    )
+
+    expect(request).toEqual({ name: '삼성카드(구)' })
+  })
+
+  it('종류는 담지 않는다', () => {
+    // 청구일 산출 방식이 바뀌면 이미 기록된 거래의 청구일이 설명되지 않는다
+    const original = 결제수단()
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), type: 'CHECK_CARD' },
+      original,
+    )
+
+    expect(request).toEqual({})
+  })
+
+  it('바뀐 결제일을 담는다', () => {
+    const original = 결제수단()
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), paymentDay: '25' },
+      original,
+    )
+
+    expect(request).toEqual({ paymentDay: 25 })
+  })
+
+  it('마감일을 비우면 clearClosingDay 로 보낸다', () => {
+    // 마감일 미설정은 "익월 결제" 라는 의미를 갖는 상태다
+    const original = 결제수단({ closingDay: 25 })
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), closingDay: '' },
+      original,
+    )
+
+    expect(request).toEqual({ clearClosingDay: true })
+  })
+
+  it('원래 마감일이 없었으면 비워도 아무것도 보내지 않는다', () => {
+    const original = 결제수단()
+
+    const request = toUpdatePaymentMethodRequest(toFormValues(original), original)
+
+    expect(request).toEqual({})
+    expect(hasChanges(request)).toBe(false)
+  })
+
+  it('마감일을 새로 지정한다', () => {
+    const original = 결제수단()
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), closingDay: '25' },
+      original,
+    )
+
+    expect(request).toEqual({ closingDay: 25 })
+  })
+
+  it('즉시 결제 수단은 결제일과 마감일을 담지 않는다', () => {
+    // 현금·체크카드·계좌에는 결제 조건이 없다
+    const original = 결제수단({ name: '현금', type: 'CASH', paymentDay: undefined, immediateSettlement: true })
+
+    const request = toUpdatePaymentMethodRequest(
+      { ...toFormValues(original), paymentDay: '14', closingDay: '25' },
+      original,
+    )
+
+    expect(request).toEqual({})
+  })
+
+  it('이름과 결제 조건을 함께 담는다', () => {
+    const original = 결제수단({ closingDay: 20 })
+
+    const request = toUpdatePaymentMethodRequest(
+      { name: '현대카드', type: 'CREDIT_CARD', paymentDay: '25', closingDay: '12' },
+      original,
+    )
+
+    expect(request).toEqual({ name: '현대카드', paymentDay: 25, closingDay: 12 })
+    expect(hasChanges(request)).toBe(true)
+  })
+})
+
 })

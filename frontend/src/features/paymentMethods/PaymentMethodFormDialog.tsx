@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { FieldError } from '@/components/common/FieldError'
 import { Button } from '@/components/ui/button'
@@ -16,9 +16,10 @@ import { Select } from '@/components/ui/select'
 import { paymentMethodTypeLabel } from '@/lib/format'
 import { useUiStore } from '@/store/uiStore'
 import type { PaymentMethod, PaymentMethodType } from '@/types/domain'
-import { useRegisterPaymentMethod } from './queries'
+import { useRegisterPaymentMethod, useUpdatePaymentMethod } from './queries'
 import {
   hasBillingCycle,
+  hasChanges,
   hasErrors,
   initialPaymentMethodFormValues,
   MAX_DAY_OF_MONTH,
@@ -26,31 +27,59 @@ import {
   NAME_MAX_LENGTH,
   PAYMENT_METHOD_TYPE_OPTIONS,
   toFormErrors,
+  toFormValues,
   toRegisterPaymentMethodRequest,
+  toUpdatePaymentMethodRequest,
   validatePaymentMethodForm,
   type PaymentMethodFormErrors,
   type PaymentMethodFormValues,
 } from './paymentMethodForm'
 
+export interface PaymentMethodFormDialogProps {
+  /** 수정 대상. 넘기면 수정 모드로 열린다. */
+  editing?: PaymentMethod
+  onCloseEdit?: () => void
+}
+
 /**
- * 결제 수단 등록 모달.
+ * 결제 수단 등록·수정 모달.
  *
  * 신용카드를 선택하면 결제일·마감일 입력이 나타난다. 결제일이 없으면 청구일을
  * 산출할 수 없으므로 필수이며, 마감일은 선택 항목이다(미설정 = 익월 결제).
  * 즉시 결제 수단에는 두 입력을 노출하지 않고 요청에도 담지 않는다.
+ *
+ * **수정 시 종류는 바꿀 수 없다.** 청구일 산출 방식이 바뀌면 이미 기록된 거래의
+ * 청구일이 설명되지 않기 때문이다(서버도 수정 대상으로 받지 않는다).
  */
-export function PaymentMethodFormDialog() {
-  const open = useUiStore((state) => state.paymentMethodFormOpen)
-  const close = useUiStore((state) => state.closePaymentMethodForm)
+export function PaymentMethodFormDialog({ editing, onCloseEdit }: PaymentMethodFormDialogProps = {}) {
+  const registerOpen = useUiStore((state) => state.paymentMethodFormOpen)
+  const closeRegister = useUiStore((state) => state.closePaymentMethodForm)
 
   const register = useRegisterPaymentMethod()
+  const updateMutation = useUpdatePaymentMethod()
+
+  const isEditing = editing !== undefined
+  // 등록은 전역 상태(모든 화면에서 열 수 있어야 하므로), 수정은 대상을 넘겨 여는
+  // 지역 상태다. 둘 중 하나라도 열려 있으면 모달을 띄운다.
+  const open = isEditing || registerOpen
 
   const [values, setValues] = useState<PaymentMethodFormValues>(initialPaymentMethodFormValues)
   const [errors, setErrors] = useState<PaymentMethodFormErrors>({})
   const [formError, setFormError] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState<PaymentMethod | null>(null)
 
-  const showBillingFields = hasBillingCycle(values.type)
+  // 수정 시 종류는 바꿀 수 없으므로 원본의 종류로 판단한다.
+  const showBillingFields = hasBillingCycle(editing?.type ?? values.type)
+
+  // 수정 대상이 바뀌면 그 값으로 폼을 다시 채운다.
+  useEffect(() => {
+    if (editing) {
+      setValues(toFormValues(editing))
+      setErrors({})
+      setFormError(null)
+      setLastSaved(null)
+    }
+  }, [editing])
 
   function update<K extends keyof PaymentMethodFormValues>(
     key: K,
@@ -68,10 +97,14 @@ export function PaymentMethodFormDialog() {
   }
 
   function handleOpenChange(nextOpen: boolean) {
-    if (!nextOpen) {
-      close()
-      reset()
+    if (nextOpen) return
+
+    if (isEditing) {
+      onCloseEdit?.()
+      return
     }
+    closeRegister()
+    reset()
   }
 
   function handleSubmit(event: React.FormEvent) {
@@ -81,6 +114,31 @@ export function PaymentMethodFormDialog() {
     const validationErrors = validatePaymentMethodForm(values)
     if (hasErrors(validationErrors)) {
       setErrors(validationErrors)
+      return
+    }
+
+    if (editing) {
+      const request = toUpdatePaymentMethodRequest(values, editing)
+      if (!hasChanges(request)) {
+        onCloseEdit?.()
+        return
+      }
+
+      updateMutation.mutate(
+        { id: editing.id, request },
+        {
+          onSuccess: () => onCloseEdit?.(),
+          onError: (error) => {
+            if (error instanceof ApiError) {
+              setErrors(toFormErrors(error.fieldErrors))
+              const hasFieldErrors = (error.fieldErrors?.length ?? 0) > 0
+              setFormError(hasFieldErrors ? null : error.message)
+              return
+            }
+            setFormError('결제 수단을 수정하지 못했습니다.')
+          },
+        },
+      )
       return
     }
 
@@ -108,7 +166,7 @@ export function PaymentMethodFormDialog() {
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>결제 수단 등록</DialogTitle>
+          <DialogTitle>{isEditing ? '결제 수단 수정' : '결제 수단 등록'}</DialogTitle>
           <DialogDescription>
             신용카드는 결제일이 필요합니다. 결제일과 마감일로 거래의 청구일이 산출됩니다.
           </DialogDescription>
@@ -126,6 +184,7 @@ export function PaymentMethodFormDialog() {
             <Select
               id="pm-type"
               value={values.type}
+              disabled={isEditing}
               onChange={(event) => update('type', event.target.value as PaymentMethodType | '')}
               aria-invalid={errors.type !== undefined}
             >
@@ -137,7 +196,14 @@ export function PaymentMethodFormDialog() {
               ))}
             </Select>
             <FieldError message={errors.type} />
-            <TypeHint type={values.type} />
+            {isEditing ? (
+              <p className="text-muted-foreground text-xs">
+                종류는 바꿀 수 없습니다. 청구일 산출 방식이 바뀌면 이미 기록된 거래의 청구일이
+                설명되지 않습니다.
+              </p>
+            ) : (
+              <TypeHint type={values.type} />
+            )}
           </div>
 
           <div className="grid gap-1.5">
@@ -210,8 +276,14 @@ export function PaymentMethodFormDialog() {
             <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
               닫기
             </Button>
-            <Button type="submit" disabled={register.isPending}>
-              {register.isPending ? '등록 중…' : '등록'}
+            <Button type="submit" disabled={register.isPending || updateMutation.isPending}>
+              {isEditing
+                ? updateMutation.isPending
+                  ? '저장 중…'
+                  : '저장'
+                : register.isPending
+                  ? '등록 중…'
+                  : '등록'}
             </Button>
           </DialogFooter>
         </form>
