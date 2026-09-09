@@ -1,11 +1,14 @@
+import { Link } from 'react-router-dom'
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
   Legend,
+  Line,
   Pie,
   PieChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -27,6 +30,7 @@ import {
   usePaymentMethodBreakdown,
 } from '@/features/analytics/queries'
 import { useInstallmentPlans } from '@/features/installments/queries'
+import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
 import { formatKrw, formatKrwCompact, formatPercentage, formatYearMonth } from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
 import { usePeriodParams, usePeriodStore } from '@/store/periodStore'
@@ -78,12 +82,14 @@ export function AnalyticsPage() {
           >
             <div className="h-72">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={trendSeries}>
+                <ComposedChart data={trendSeries}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={formatKrwCompact} tick={{ fontSize: 11 }} width={56} />
                   <Tooltip formatter={formatTooltipAmount} />
                   <Legend />
+                  {/* 수지가 음수로 내려가는 지점을 알아볼 수 있게 0선을 그린다 */}
+                  <ReferenceLine y={0} stroke="var(--color-border)" />
                   <Bar
                     dataKey="income"
                     name="수입"
@@ -98,7 +104,17 @@ export function AnalyticsPage() {
                     radius={3}
                     isAnimationActive={false}
                   />
-                </BarChart>
+                  {/* 막대만으로는 흑자·적자 흐름이 보이지 않는다. 수지를 선으로 겹쳐 그린다 */}
+                  <Line
+                    type="monotone"
+                    dataKey="balance"
+                    name="수지"
+                    stroke="var(--color-balance)"
+                    strokeWidth={2}
+                    dot={{ r: 3 }}
+                    isAnimationActive={false}
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             </div>
           </QueryState>
@@ -111,12 +127,14 @@ export function AnalyticsPage() {
           isPending={byCategory.isPending}
           error={byCategory.error}
           slices={categoryData}
+          linkFor={(id) => buildTransactionsPath({ categoryId: id })}
         />
         <SharePanel
           title="카드별 지출 점유율"
           isPending={byPaymentMethod.isPending}
           error={byPaymentMethod.error}
           slices={paymentMethodData}
+          linkFor={(id) => buildTransactionsPath({ paymentMethodId: id })}
         />
       </div>
 
@@ -156,10 +174,12 @@ interface SharePanelProps {
   title: string
   isPending: boolean
   error: unknown
-  slices: { name: string; value: number; percentage: number }[]
+  slices: { id?: number; name: string; value: number; percentage: number }[]
+  /** 항목을 눌렀을 때 이동할 거래 목록 경로. 식별자가 있는 조각에만 적용된다. */
+  linkFor: (id: number) => string
 }
 
-function SharePanel({ title, isPending, error, slices }: SharePanelProps) {
+function SharePanel({ title, isPending, error, slices, linkFor }: SharePanelProps) {
   return (
     <Card>
       <CardHeader>
@@ -191,21 +211,46 @@ function SharePanel({ title, isPending, error, slices }: SharePanelProps) {
               </PieChart>
             </ResponsiveContainer>
           </div>
+          {/*
+            항목을 누르면 그 금액을 만든 거래 목록으로 이동한다.
+            "식비 45만원" 에서 "무엇 때문이었나" 로 넘어가는 경로가 복기의 핵심이다.
+          */}
           <ul className="mt-2 space-y-1">
-            {slices.map((slice, index) => (
-              <li key={slice.name} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <span
-                    className="inline-block size-2.5 rounded-full"
-                    style={{ backgroundColor: SLICE_COLORS[index % SLICE_COLORS.length] }}
-                  />
-                  {slice.name}
-                </span>
-                <span className="text-muted-foreground">
-                  {formatKrw(slice.value)} · {formatPercentage(slice.percentage)}
-                </span>
-              </li>
-            ))}
+            {slices.map((slice, index) => {
+              const dot = (
+                <span
+                  className="inline-block size-2.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: SLICE_COLORS[index % SLICE_COLORS.length] }}
+                />
+              )
+              const amount = `${formatKrw(slice.value)} · ${formatPercentage(slice.percentage)}`
+
+              return (
+                <li key={slice.name}>
+                  {slice.id === undefined ? (
+                    <span className="flex items-center justify-between px-1.5 py-1 text-sm">
+                      <span className="flex items-center gap-2">
+                        {dot}
+                        {slice.name}
+                      </span>
+                      <span className="text-muted-foreground">{amount}</span>
+                    </span>
+                  ) : (
+                    <Link
+                      to={linkFor(slice.id)}
+                      className="hover:bg-accent flex items-center justify-between rounded px-1.5 py-1 text-sm transition-colors"
+                      title={`${slice.name} 거래 내역 보기`}
+                    >
+                      <span className="flex items-center gap-2">
+                        {dot}
+                        <span className="underline-offset-2 hover:underline">{slice.name}</span>
+                      </span>
+                      <span className="text-muted-foreground">{amount}</span>
+                    </Link>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </QueryState>
       </CardContent>

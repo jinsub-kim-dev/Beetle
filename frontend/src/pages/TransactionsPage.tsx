@@ -1,3 +1,4 @@
+import { useSearchParams } from 'react-router-dom'
 import { AmountText } from '@/components/common/AmountText'
 import { QueryState } from '@/components/common/QueryState'
 import { PeriodSelector } from '@/components/layout/PeriodSelector'
@@ -6,7 +7,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCategoryMap } from '@/features/categories/queries'
 import { usePaymentMethodMap } from '@/features/paymentMethods/queries'
 import { useToggleSettlement, useTransactions } from '@/features/transactions/queries'
-import { formatDate } from '@/lib/format'
+import { TransactionFilterBar } from '@/features/transactions/TransactionFilterBar'
+import { parseTransactionFilter } from '@/features/transactions/transactionFilter'
+import { formatDate, formatKrw } from '@/lib/format'
 import { usePeriodParams } from '@/store/periodStore'
 
 /**
@@ -17,19 +20,32 @@ import { usePeriodParams } from '@/store/periodStore'
  */
 export function TransactionsPage() {
   const params = usePeriodParams()
-  const transactions = useTransactions(params)
+  const [searchParams] = useSearchParams()
+  const filter = parseTransactionFilter(searchParams)
+
+  const transactions = useTransactions({ ...params, ...filter })
   const categories = useCategoryMap()
   const paymentMethods = usePaymentMethodMap()
   const toggleSettlement = useToggleSettlement()
 
   const rows = transactions.data ?? []
+  const total = rows.reduce((sum, transaction) => sum + transaction.amount, 0)
 
   return (
     <div className="space-y-6">
       <PeriodSelector />
 
       <Card>
-        <CardContent className="pt-5">
+        <CardContent className="grid gap-4 pt-5">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <TransactionFilterBar />
+            {/* 필터를 걸었을 때 그 범위의 건수와 합계를 바로 확인할 수 있게 한다. */}
+            <p className="text-muted-foreground text-sm">
+              {rows.length}건 · 합계{' '}
+              <span className="tabular-amount text-foreground font-medium">{formatKrw(total)}</span>
+            </p>
+          </div>
+
           <QueryState
             isPending={transactions.isPending}
             error={transactions.error}

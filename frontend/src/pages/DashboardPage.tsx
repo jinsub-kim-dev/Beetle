@@ -1,9 +1,11 @@
+import { Link } from 'react-router-dom'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { AmountText } from '@/components/common/AmountText'
 import { QueryState } from '@/components/common/QueryState'
 import { PeriodSelector } from '@/components/layout/PeriodSelector'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { expenseNatureSlices, formatTooltipAmount } from '@/features/analytics/chartData'
+import { topExpenses, topExpenseShare } from '@/features/analytics/topExpenses'
 import {
   useExpenseNatureBreakdown,
   usePeriodSummary,
@@ -11,11 +13,15 @@ import {
 } from '@/features/analytics/queries'
 import { useTransactions } from '@/features/transactions/queries'
 import { useCategoryMap } from '@/features/categories/queries'
+import { buildTransactionsPath } from '@/features/transactions/transactionFilter'
 import { dateBasisLabel, formatKrw, formatMonthDay, formatPercentage } from '@/lib/format'
 import { shiftYearMonth } from '@/lib/period'
 import { usePeriodParams, usePeriodStore } from '@/store/periodStore'
 
 const NATURE_COLORS = ['var(--color-fixed-expense)', 'var(--color-variable-expense)']
+
+/** 대시보드에 노출할 큰 지출 건수. */
+const TOP_EXPENSE_LIMIT = 5
 
 /**
  * 대시보드: 이번 달 요약, 고정비/변동비 비중, 최근 거래.
@@ -33,6 +39,8 @@ export function DashboardPage() {
   const categories = useCategoryMap()
   const slices = nature.data ? expenseNatureSlices(nature.data) : []
   const recent = (transactions.data ?? []).slice(0, 8)
+  const topItems = topExpenses(transactions.data ?? [], categories, TOP_EXPENSE_LIMIT)
+  const topShare = topExpenseShare(topItems, summary.data?.expense ?? 0)
 
   return (
     <div className="space-y-6">
@@ -140,42 +148,96 @@ export function DashboardPage() {
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle>최근 거래 ({dateBasisLabel(params.basis)} 기준)</CardTitle>
+          <CardHeader className="flex-row items-start justify-between gap-3">
+            <div className="grid gap-1">
+              <CardTitle>큰 지출 Top {TOP_EXPENSE_LIMIT}</CardTitle>
+              <CardDescription>
+                이 {TOP_EXPENSE_LIMIT}건이 이번 달 지출의 {formatPercentage(topShare)} 를
+                차지합니다.
+              </CardDescription>
+            </div>
           </CardHeader>
           <CardContent>
             <QueryState
               isPending={transactions.isPending}
               error={transactions.error}
-              isEmpty={recent.length === 0}
-              emptyMessage="이 기간에 등록된 거래가 없습니다."
+              isEmpty={topItems.length === 0}
+              emptyMessage="이 기간에 집계할 지출이 없습니다."
             >
-              <ul className="divide-y">
-                {recent.map((transaction) => (
-                  <li key={transaction.id} className="flex items-center justify-between py-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {categories.get(transaction.categoryId)?.name ?? '분류 없음'}
-                        {transaction.memo && (
-                          <span className="text-muted-foreground ml-2 text-xs">
-                            {transaction.memo}
+              <ol className="divide-y">
+                {topItems.map(({ transaction, categoryName }, index) => (
+                  <li key={transaction.id}>
+                    <Link
+                      to={buildTransactionsPath({ categoryId: transaction.categoryId })}
+                      className="hover:bg-accent flex items-center justify-between gap-3 rounded px-1.5 py-2 transition-colors"
+                      title={`${categoryName} 거래 내역 보기`}
+                    >
+                      <span className="flex min-w-0 items-center gap-2.5">
+                        <span className="text-muted-foreground w-4 shrink-0 text-xs">
+                          {index + 1}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-sm font-medium">
+                            {categoryName}
+                            {transaction.memo && (
+                              <span className="text-muted-foreground ml-2 font-normal">
+                                {transaction.memo}
+                              </span>
+                            )}
                           </span>
-                        )}
-                      </p>
-                      <p className="text-muted-foreground text-xs">
-                        소비 {formatMonthDay(transaction.spentDate)} · 청구{' '}
-                        {formatMonthDay(transaction.billDate)}
-                        {!transaction.settled && ' · 미출금'}
-                      </p>
-                    </div>
-                    <AmountText amount={transaction.amount} className="text-sm" />
+                          <span className="text-muted-foreground block text-xs">
+                            소비 {formatMonthDay(transaction.spentDate)} · 청구{' '}
+                            {formatMonthDay(transaction.billDate)}
+                            {!transaction.settled && ' · 미출금'}
+                          </span>
+                        </span>
+                      </span>
+                      <AmountText amount={transaction.amount} className="shrink-0 text-sm" />
+                    </Link>
                   </li>
                 ))}
-              </ul>
+              </ol>
             </QueryState>
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>최근 거래 ({dateBasisLabel(params.basis)} 기준)</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <QueryState
+            isPending={transactions.isPending}
+            error={transactions.error}
+            isEmpty={recent.length === 0}
+            emptyMessage="이 기간에 등록된 거래가 없습니다."
+          >
+            <ul className="divide-y">
+              {recent.map((transaction) => (
+                <li key={transaction.id} className="flex items-center justify-between py-2">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">
+                      {categories.get(transaction.categoryId)?.name ?? '분류 없음'}
+                      {transaction.memo && (
+                        <span className="text-muted-foreground ml-2 text-xs">
+                          {transaction.memo}
+                        </span>
+                      )}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      소비 {formatMonthDay(transaction.spentDate)} · 청구{' '}
+                      {formatMonthDay(transaction.billDate)}
+                      {!transaction.settled && ' · 미출금'}
+                    </p>
+                  </div>
+                  <AmountText amount={transaction.amount} className="text-sm" />
+                </li>
+              ))}
+            </ul>
+          </QueryState>
+        </CardContent>
+      </Card>
     </div>
   )
 }

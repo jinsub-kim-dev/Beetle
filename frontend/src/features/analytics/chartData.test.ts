@@ -135,6 +135,28 @@ describe('chartData - 차트 데이터 변환', () => {
       ])
     })
 
+    it('개별 조각은 원본 식별자를 유지하고 기타 조각에는 식별자가 없다', () => {
+      // 드릴다운 링크는 식별자가 있어야 만들 수 있다. 기타는 여러 항목을 합친 것이라 없다.
+      const withIds = [
+        { id: 11, name: 'A', total: 500, sharePercentage: 50 },
+        { id: 22, name: 'B', total: 300, sharePercentage: 30 },
+        { id: 33, name: 'C', total: 200, sharePercentage: 20 },
+      ]
+
+      const slices = toShareSlices(withIds, 2)
+
+      expect(slices.map((slice) => slice.id)).toEqual([11, 22, undefined])
+      expect(slices[2].name).toBe('기타')
+    })
+
+    it('원본에 식별자가 없으면 조각에도 넣지 않는다', () => {
+      expect(toShareSlices([{ name: 'A', total: 100, sharePercentage: 100 }])[0]).toEqual({
+        name: 'A',
+        value: 100,
+        percentage: 100,
+      })
+    })
+
     it('원본 배열을 변경하지 않는다', () => {
       const original = [items[3], items[0], items[1]]
       const snapshot = [...original]
@@ -169,8 +191,8 @@ describe('chartData - 차트 데이터 변환', () => {
       ]
 
       expect(categorySlices(items)).toEqual([
-        { name: '월세', value: 700_000, percentage: 70 },
-        { name: '식비', value: 300_000, percentage: 30 },
+        { id: 1, name: '월세', value: 700_000, percentage: 70 },
+        { id: 2, name: '식비', value: 300_000, percentage: 30 },
       ])
     })
 

@@ -24,6 +24,11 @@ export interface TrendPoint {
 
 /** 도넛 차트의 한 조각. */
 export interface ShareSlice {
+  /**
+   * 원본 항목의 식별자. 거래 목록으로 드릴다운하는 링크를 만들 때 쓴다.
+   * `기타` 로 묶인 조각에는 없다(여러 항목을 합친 것이라 가리킬 대상이 없다).
+   */
+  id?: number
   name: string
   value: number
   percentage: number
@@ -48,7 +53,7 @@ export function toTrendSeries(summaries: MonthlySummary[]): TrendPoint[] {
  * @param topN 개별로 표시할 최대 개수. 0 이하면 전부 `기타` 로 묶인다.
  */
 export function toShareSlices(
-  items: readonly { name: string; total: number; sharePercentage: number }[],
+  items: readonly { id?: number; name: string; total: number; sharePercentage: number }[],
   topN = 5,
 ): ShareSlice[] {
   if (items.length === 0) return []
@@ -58,6 +63,7 @@ export function toShareSlices(
   const rest = topN > 0 ? sorted.slice(topN) : sorted
 
   const slices: ShareSlice[] = visible.map((item) => ({
+    ...(item.id === undefined ? {} : { id: item.id }),
     name: item.name,
     value: item.total,
     percentage: item.sharePercentage,
@@ -78,6 +84,7 @@ export function toShareSlices(
 export function categorySlices(items: CategoryBreakdownItem[], topN = 5): ShareSlice[] {
   return toShareSlices(
     items.map((item) => ({
+      id: item.categoryId,
       name: item.categoryName,
       total: item.total,
       sharePercentage: item.sharePercentage,
@@ -90,6 +97,7 @@ export function categorySlices(items: CategoryBreakdownItem[], topN = 5): ShareS
 export function paymentMethodSlices(items: PaymentMethodBreakdownItem[], topN = 5): ShareSlice[] {
   return toShareSlices(
     items.map((item) => ({
+      id: item.paymentMethodId,
       name: item.paymentMethodName,
       total: item.total,
       sharePercentage: item.sharePercentage,
