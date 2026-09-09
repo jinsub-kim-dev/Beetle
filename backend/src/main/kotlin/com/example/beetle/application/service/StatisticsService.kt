@@ -10,6 +10,8 @@ import com.example.beetle.application.port.ExpenseNatureBreakdown
 import com.example.beetle.application.port.ExpenseNatureShareItem
 import com.example.beetle.application.port.PaymentMethodBreakdown
 import com.example.beetle.application.port.PaymentMethodShareItem
+import com.example.beetle.application.port.RecurringExpenseReview
+import com.example.beetle.application.port.SpendingPattern
 import com.example.beetle.application.port.StatisticsUseCase
 import com.example.beetle.application.port.UpcomingBills
 import com.example.beetle.domain.exception.InvariantViolationException
@@ -24,8 +26,12 @@ import com.example.beetle.domain.model.Ratio
 import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PeriodSummary
 import com.example.beetle.domain.query.CategoryAggregate
+import com.example.beetle.domain.query.RecurringExpenseQuery
+import com.example.beetle.domain.query.SpendingPatternQuery
 import com.example.beetle.domain.query.StatisticsQuery
+import com.example.beetle.domain.service.RecurringExpenseDetector
 import com.example.beetle.domain.service.SpendingAnomalyDetector
+import com.example.beetle.domain.service.SpendingPatternAnalyzer
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import java.time.LocalDate
@@ -41,7 +47,11 @@ import java.time.YearMonth
 @Transactional(readOnly = true)
 class StatisticsService(
     private val statisticsQuery: StatisticsQuery,
+    private val recurringExpenseQuery: RecurringExpenseQuery,
+    private val spendingPatternQuery: SpendingPatternQuery,
     private val spendingAnomalyDetector: SpendingAnomalyDetector,
+    private val recurringExpenseDetector: RecurringExpenseDetector,
+    private val spendingPatternAnalyzer: SpendingPatternAnalyzer,
 ) : StatisticsUseCase {
 
     override fun periodSummary(
@@ -216,6 +226,53 @@ class StatisticsService(
             month = month,
             baselineMonths = baselineMonths,
             anomalies = spendingAnomalyDetector.detect(expenses, month, baselineMonths),
+        )
+    }
+
+    override fun recurringExpenses(
+        basis: DateBasis,
+        month: YearMonth,
+        windowMonths: Int,
+    ): RecurringExpenseReview {
+        if (windowMonths < RecurringExpenseDetector.MINIMUM_MONTHS ||
+            windowMonths > RecurringExpenseDetector.MAX_WINDOW_MONTHS
+        ) {
+            throw InvariantViolationException(
+                "조회 구간은 ${RecurringExpenseDetector.MINIMUM_MONTHS} 이상 " +
+                    "${RecurringExpenseDetector.MAX_WINDOW_MONTHS} 이하여야 합니다. 입력값: $windowMonths",
+            )
+        }
+
+        // 구간은 대상 월을 포함해 windowMonths 개월이다.
+        val from = month.minusMonths(windowMonths.toLong() - 1)
+        val candidates = recurringExpenseQuery.findCandidates(basis, from, month)
+
+        return RecurringExpenseReview(
+            basis = basis,
+            from = from,
+            to = month,
+            minimumMonths = RecurringExpenseDetector.MINIMUM_MONTHS,
+            report = recurringExpenseDetector.detect(candidates, month),
+        )
+    }
+
+    override fun spendingPattern(
+        basis: DateBasis,
+        from: LocalDate,
+        to: LocalDate,
+    ): SpendingPattern {
+        validatePeriod(from, to)
+
+        return SpendingPattern(
+            basis = basis,
+            from = from,
+            to = to,
+            weekdays = spendingPatternAnalyzer.analyzeWeekdays(
+                spendingPatternQuery.weekdayExpenses(basis, from, to), from, to,
+            ),
+            daily = spendingPatternAnalyzer.accumulate(
+                spendingPatternQuery.dailyExpenses(basis, from, to), from, to,
+            ),
         )
     }
 

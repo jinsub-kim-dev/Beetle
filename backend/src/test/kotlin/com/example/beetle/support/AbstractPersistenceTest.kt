@@ -1,14 +1,20 @@
 package com.example.beetle.support
 
+import com.example.beetle.domain.query.RecurringExpenseQuery
+import com.example.beetle.domain.query.SpendingPatternQuery
 import com.example.beetle.domain.query.StatisticsQuery
+import com.example.beetle.domain.repository.BudgetRepository
 import com.example.beetle.domain.repository.CategoryRepository
 import com.example.beetle.domain.repository.InstallmentPlanRepository
 import com.example.beetle.domain.repository.PaymentMethodRepository
 import com.example.beetle.domain.repository.TransactionRepository
+import com.example.beetle.infrastructure.persistence.adapter.BudgetRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.CategoryRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.InstallmentPlanRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.PaymentMethodRepositoryAdapter
 import com.example.beetle.infrastructure.persistence.adapter.TransactionRepositoryAdapter
+import com.example.beetle.infrastructure.persistence.query.RecurringExpenseQueryAdapter
+import com.example.beetle.infrastructure.persistence.query.SpendingPatternQueryAdapter
 import com.example.beetle.infrastructure.persistence.query.StatisticsQueryAdapter
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
@@ -43,7 +49,10 @@ import org.springframework.context.annotation.Import
     PaymentMethodRepositoryAdapter::class,
     TransactionRepositoryAdapter::class,
     InstallmentPlanRepositoryAdapter::class,
+    BudgetRepositoryAdapter::class,
     StatisticsQueryAdapter::class,
+    RecurringExpenseQueryAdapter::class,
+    SpendingPatternQueryAdapter::class,
 )
 abstract class AbstractPersistenceTest {
 
@@ -60,7 +69,16 @@ abstract class AbstractPersistenceTest {
     protected lateinit var installmentPlanRepository: InstallmentPlanRepository
 
     @field:Autowired
+    protected lateinit var budgetRepository: BudgetRepository
+
+    @field:Autowired
     protected lateinit var statisticsQuery: StatisticsQuery
+
+    @field:Autowired
+    protected lateinit var recurringExpenseQuery: RecurringExpenseQuery
+
+    @field:Autowired
+    protected lateinit var spendingPatternQuery: SpendingPatternQuery
 
     @field:Autowired
     protected lateinit var testEntityManager: TestEntityManager

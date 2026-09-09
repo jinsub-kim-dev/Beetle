@@ -1,5 +1,7 @@
 package com.example.beetle.fixture
 
+import com.example.beetle.domain.model.Budget
+import com.example.beetle.domain.model.BudgetId
 import com.example.beetle.domain.model.Category
 import com.example.beetle.domain.model.CategoryId
 import com.example.beetle.domain.model.CategoryType
@@ -13,6 +15,7 @@ import com.example.beetle.domain.model.PaymentMethodType
 import com.example.beetle.domain.model.Transaction
 import com.example.beetle.domain.model.TransactionId
 import java.time.LocalDate
+import java.time.YearMonth
 
 /**
  * 도메인 테스트 픽스처.
@@ -135,4 +138,20 @@ fun installmentTransaction(
         installmentSequence = sequence,
     )
     return id?.let { created.assignId(TransactionId(it)) } ?: created
+}
+
+// --- Budget ---
+
+fun budget(
+    categoryId: Long = 1L,
+    yearMonth: YearMonth = YearMonth.of(2026, 9),
+    amount: Long = 500_000L,
+    id: Long? = null,
+): Budget {
+    val created = Budget.create(
+        categoryId = CategoryId(categoryId),
+        yearMonth = yearMonth,
+        amount = Money.of(amount),
+    )
+    return id?.let { created.assignId(BudgetId(it)) } ?: created
 }

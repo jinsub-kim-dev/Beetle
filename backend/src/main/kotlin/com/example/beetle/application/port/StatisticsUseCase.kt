@@ -10,7 +10,11 @@ import com.example.beetle.domain.model.DateBasis
 import com.example.beetle.domain.model.ExpenseNature
 import com.example.beetle.domain.model.Money
 import com.example.beetle.domain.model.Ratio
+import com.example.beetle.domain.service.DailySpending
+import com.example.beetle.domain.service.RecurringExpenseDetector
+import com.example.beetle.domain.service.RecurringExpenseReport
 import com.example.beetle.domain.service.SpendingAnomaly
+import com.example.beetle.domain.service.WeekdaySpending
 import com.example.beetle.domain.query.CategoryAggregate
 import com.example.beetle.domain.query.ExpenseNatureAggregate
 import com.example.beetle.domain.query.MonthlySummary
@@ -84,6 +88,25 @@ interface StatisticsUseCase {
         month: YearMonth,
         baselineMonths: Int = DEFAULT_ANOMALY_BASELINE_MONTHS,
     ): CategoryAnomalyReport
+
+    /**
+     * 매달 반복되는 지출(구독·정기 결제)을 점검한다.
+     *
+     * 안 쓰는 구독을 발견하는 것은 복기의 가장 큰 수확이다. 월 9,900원은 눈에 띄지 않지만
+     * 연간 환산액으로 보면 결정이 달라진다.
+     */
+    fun recurringExpenses(
+        basis: DateBasis,
+        month: YearMonth,
+        windowMonths: Int = RecurringExpenseDetector.DEFAULT_WINDOW_MONTHS,
+    ): RecurringExpenseReview
+
+    /**
+     * 지출의 시간 축 패턴. 요일별 평균과 일별 누적을 함께 반환한다.
+     *
+     * "무엇에 썼나" 를 넘어 "언제 쓰는가" 를 보여준다. 습관은 카테고리보다 바꾸기 쉽다.
+     */
+    fun spendingPattern(basis: DateBasis, from: LocalDate, to: LocalDate): SpendingPattern
 }
 
 /** 이상치 판정의 기본 비교 창. 계절성에 휘둘리지 않으면서 최근 흐름을 반영하는 길이다. */
@@ -163,6 +186,28 @@ data class ExpenseNatureBreakdown(
 data class ExpenseNatureShareItem(
     val aggregate: ExpenseNatureAggregate,
     val share: Ratio,
+)
+
+/**
+ * 반복 지출 점검 결과.
+ *
+ * 판정 기준을 함께 담아 화면에서 "무엇을 반복으로 봤는지" 를 설명할 수 있게 한다.
+ */
+data class RecurringExpenseReview(
+    val basis: DateBasis,
+    val from: YearMonth,
+    val to: YearMonth,
+    val minimumMonths: Int,
+    val report: RecurringExpenseReport,
+)
+
+/** 시간 축 소비 패턴. */
+data class SpendingPattern(
+    val basis: DateBasis,
+    val from: LocalDate,
+    val to: LocalDate,
+    val weekdays: List<WeekdaySpending>,
+    val daily: List<DailySpending>,
 )
 
 /** 청구 예정액. */

@@ -30,7 +30,14 @@ import com.example.beetle.domain.query.ExpenseNatureAggregate
 import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PaymentMethodAggregate
 import com.example.beetle.domain.query.PeriodSummary
+import com.example.beetle.application.port.RecurringExpenseReview
+import com.example.beetle.application.port.SpendingPattern
+import com.example.beetle.domain.service.DailySpending
+import com.example.beetle.domain.service.RecurringExpense
+import com.example.beetle.domain.service.RecurringExpenseReport
 import com.example.beetle.domain.service.SpendingAnomaly
+import com.example.beetle.domain.service.WeekdaySpending
+import com.example.beetle.presentation.dto.DEFAULT_RECURRING_WINDOW_MONTHS
 import io.mockk.clearMocks
 import io.mockk.every
 import io.mockk.mockk
@@ -48,6 +55,7 @@ import org.springframework.test.web.servlet.MockMvc
 import org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath
 import org.springframework.test.web.servlet.result.MockMvcResultMatchers.status
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -686,6 +694,176 @@ class StatisticsControllerTest {
             )
                 .andExpect(status().isBadRequest)
                 .andExpect(jsonPath("$.code").value("INVARIANT_VIOLATION"))
+        }
+    }
+
+
+    @Nested
+    @DisplayName("GET /api/statistics/recurring-expenses")
+    inner class RecurringExpenses {
+
+        private fun 반복지출(
+            name: String = "구독료",
+            amount: Long = 9_900,
+            isActive: Boolean = true,
+        ) = RecurringExpense(
+            categoryId = CategoryId(7),
+            categoryName = name,
+            nature = ExpenseNature.FIXED,
+            paymentMethodId = PaymentMethodId(2),
+            paymentMethodName = "삼성카드",
+            monthlyAmount = Money.of(amount),
+            monthsPresent = 6,
+            lastSeenMonth = YearMonth.of(2026, 9),
+            isActive = isActive,
+            annualEstimate = Money.of(amount * 12),
+        )
+
+        @Test
+        fun `반복 지출과 연간 환산액을 반환한다`() {
+            // given
+            every { statisticsUseCase.recurringExpenses(any(), any(), any()) } returns
+                RecurringExpenseReview(
+                    basis = DateBasis.SPENT,
+                    from = YearMonth.of(2026, 4),
+                    to = YearMonth.of(2026, 9),
+                    minimumMonths = 3,
+                    report = RecurringExpenseReport(
+                        items = listOf(반복지출()),
+                        activeMonthlyTotal = Money.of(9_900),
+                        activeAnnualTotal = Money.of(118_800),
+                    ),
+                )
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/recurring-expenses").param("month", "2026-09"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.from").value("2026-04"))
+                .andExpect(jsonPath("$.to").value("2026-09"))
+                .andExpect(jsonPath("$.minimumMonths").value(3))
+                .andExpect(jsonPath("$.activeMonthlyTotal").value(9900))
+                .andExpect(jsonPath("$.activeAnnualTotal").value(118800))
+                .andExpect(jsonPath("$.items[0].categoryName").value("구독료"))
+                .andExpect(jsonPath("$.items[0].paymentMethodName").value("삼성카드"))
+                .andExpect(jsonPath("$.items[0].monthlyAmount").value(9900))
+                .andExpect(jsonPath("$.items[0].annualEstimate").value(118800))
+                .andExpect(jsonPath("$.items[0].active").value(true))
+                .andExpect(jsonPath("$.items[0].lastSeenMonth").value("2026-09"))
+        }
+
+        @Test
+        fun `조회 구간을 지정하지 않으면 기본값 6개월을 적용한다`() {
+            // given
+            every { statisticsUseCase.recurringExpenses(any(), any(), any()) } returns
+                RecurringExpenseReview(
+                    DateBasis.SPENT, YearMonth.of(2026, 4), YearMonth.of(2026, 9), 3,
+                    RecurringExpenseReport(emptyList(), Money.ZERO, Money.ZERO),
+                )
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/recurring-expenses").param("month", "2026-09"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify {
+                statisticsUseCase.recurringExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 9), DEFAULT_RECURRING_WINDOW_MONTHS,
+                )
+            }
+        }
+
+        @Test
+        fun `조회 구간을 지정할 수 있다`() {
+            // given
+            every { statisticsUseCase.recurringExpenses(any(), any(), any()) } returns
+                RecurringExpenseReview(
+                    DateBasis.BILL, YearMonth.of(2025, 10), YearMonth.of(2026, 9), 3,
+                    RecurringExpenseReport(emptyList(), Money.ZERO, Money.ZERO),
+                )
+
+            // when
+            mockMvc.perform(
+                get("/api/statistics/recurring-expenses")
+                    .param("basis", "BILL")
+                    .param("month", "2026-09")
+                    .param("windowMonths", "12"),
+            ).andExpect(status().isOk)
+
+            // then
+            verify {
+                statisticsUseCase.recurringExpenses(DateBasis.BILL, YearMonth.of(2026, 9), 12)
+            }
+        }
+
+        @Test
+        fun `판정할 수 없는 구간은 400 을 반환한다`() {
+            // given
+            every { statisticsUseCase.recurringExpenses(any(), any(), any()) } throws
+                InvariantViolationException("조회 구간은 3 이상 36 이하여야 합니다.")
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/recurring-expenses")
+                    .param("month", "2026-09")
+                    .param("windowMonths", "1"),
+            )
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("INVARIANT_VIOLATION"))
+        }
+    }
+
+    @Nested
+    @DisplayName("GET /api/statistics/spending-pattern")
+    inner class SpendingPatternApi {
+
+        @Test
+        fun `요일별 평균과 일별 누적을 반환한다`() {
+            // given
+            every { statisticsUseCase.spendingPattern(any(), any(), any()) } returns SpendingPattern(
+                basis = DateBasis.SPENT,
+                from = LocalDate.of(2026, 9, 1),
+                to = LocalDate.of(2026, 9, 2),
+                weekdays = listOf(
+                    WeekdaySpending(
+                        dayOfWeek = DayOfWeek.SATURDAY,
+                        total = Money.of(360_000),
+                        occurrences = 4,
+                        average = Money.of(90_000),
+                        share = Ratio.of(Money.of(360_000), Money.of(400_000)),
+                        transactionCount = 4,
+                    ),
+                ),
+                daily = listOf(
+                    DailySpending(LocalDate.of(2026, 9, 1), Money.of(10_000), Money.of(10_000), 1),
+                    DailySpending(LocalDate.of(2026, 9, 2), Money.ZERO, Money.of(10_000), 0),
+                ),
+            )
+
+            // when & then
+            mockMvc.perform(
+                get("/api/statistics/spending-pattern")
+                    .param("from", "2026-09-01")
+                    .param("to", "2026-09-02"),
+            )
+                .andExpect(status().isOk)
+                .andExpect(jsonPath("$.weekdays[0].dayOfWeek").value("SATURDAY"))
+                .andExpect(jsonPath("$.weekdays[0].total").value(360000))
+                .andExpect(jsonPath("$.weekdays[0].occurrences").value(4))
+                .andExpect(jsonPath("$.weekdays[0].average").value(90000))
+                .andExpect(jsonPath("$.weekdays[0].sharePercentage").value(90.0))
+                .andExpect(jsonPath("$.daily[1].date").value("2026-09-02"))
+                .andExpect(jsonPath("$.daily[1].total").value(0))
+                .andExpect(jsonPath("$.daily[1].cumulative").value(10000))
+        }
+
+        @Test
+        fun `기간을 누락하면 400 을 반환한다`() {
+            mockMvc.perform(get("/api/statistics/spending-pattern").param("from", "2026-09-01"))
+                .andExpect(status().isBadRequest)
+                .andExpect(jsonPath("$.code").value("MISSING_PARAMETER"))
         }
     }
 

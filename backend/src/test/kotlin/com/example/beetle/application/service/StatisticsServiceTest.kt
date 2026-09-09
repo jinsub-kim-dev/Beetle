@@ -16,7 +16,14 @@ import com.example.beetle.domain.query.MonthlySummary
 import com.example.beetle.domain.query.PaymentMethodAggregate
 import com.example.beetle.domain.query.PeriodSummary
 import com.example.beetle.domain.query.StatisticsQuery
+import com.example.beetle.domain.query.DailyExpense
+import com.example.beetle.domain.query.RecurringExpenseCandidate
+import com.example.beetle.domain.query.RecurringExpenseQuery
+import com.example.beetle.domain.query.WeekdayExpense
+import com.example.beetle.domain.query.SpendingPatternQuery
+import com.example.beetle.domain.service.RecurringExpenseDetector
 import com.example.beetle.domain.service.SpendingAnomalyDetector
+import com.example.beetle.domain.service.SpendingPatternAnalyzer
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -29,6 +36,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.junit.jupiter.params.provider.ValueSource
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 
@@ -36,9 +44,18 @@ import java.time.YearMonth
 class StatisticsServiceTest {
 
     private val statisticsQuery = mockk<StatisticsQuery>()
+    private val recurringExpenseQuery = mockk<RecurringExpenseQuery>()
+    private val spendingPatternQuery = mockk<SpendingPatternQuery>()
 
-    // 이상치 판정은 검증 대상 로직이므로 목이 아닌 실제 구현을 쓴다.
-    private val statisticsService = StatisticsService(statisticsQuery, SpendingAnomalyDetector())
+    // 판정·분석은 검증 대상 로직이므로 목이 아닌 실제 구현을 쓴다.
+    private val statisticsService = StatisticsService(
+        statisticsQuery = statisticsQuery,
+        recurringExpenseQuery = recurringExpenseQuery,
+        spendingPatternQuery = spendingPatternQuery,
+        spendingAnomalyDetector = SpendingAnomalyDetector(),
+        recurringExpenseDetector = RecurringExpenseDetector(),
+        spendingPatternAnalyzer = SpendingPatternAnalyzer(),
+    )
 
     private val 일월시작 = LocalDate.of(2026, 1, 1)
     private val 일월종료 = LocalDate.of(2026, 1, 31)
@@ -678,6 +695,145 @@ class StatisticsServiceTest {
                     )
                 }
                 .withMessageContaining("최대 60개월까지")
+        }
+    }
+
+    @Nested
+    @DisplayName("반복 지출 점검")
+    inner class RecurringExpenses {
+
+        private fun 후보(
+            categoryId: Long = 7,
+            name: String = "구독료",
+            amount: Long = 9_900,
+            monthsPresent: Int = 6,
+            lastMonth: YearMonth = YearMonth.of(2026, 9),
+        ) = RecurringExpenseCandidate(
+            categoryId = CategoryId(categoryId),
+            categoryName = name,
+            nature = ExpenseNature.FIXED,
+            paymentMethodId = PaymentMethodId(2),
+            paymentMethodName = "삼성카드",
+            amount = Money.of(amount),
+            monthsPresent = monthsPresent,
+            firstMonth = YearMonth.of(2026, 4),
+            lastMonth = lastMonth,
+            occurrences = monthsPresent,
+        )
+
+        @Test
+        fun `대상 월을 포함한 구간으로 조회한다`() {
+            // given: 6개월 창이면 4월 ~ 9월이다. 대상 월을 포함해 6개월이어야 한다
+            every {
+                recurringExpenseQuery.findCandidates(
+                    DateBasis.SPENT, YearMonth.of(2026, 4), YearMonth.of(2026, 9),
+                )
+            } returns listOf(후보())
+
+            // when
+            val 결과 = statisticsService.recurringExpenses(
+                DateBasis.SPENT, YearMonth.of(2026, 9), windowMonths = 6,
+            )
+
+            // then
+            assertThat(결과.from).isEqualTo(YearMonth.of(2026, 4))
+            assertThat(결과.to).isEqualTo(YearMonth.of(2026, 9))
+            assertThat(결과.report.items).hasSize(1)
+        }
+
+        @Test
+        fun `판정 기준을 응답에 담아 화면이 설명할 수 있게 한다`() {
+            // given
+            every {
+                recurringExpenseQuery.findCandidates(
+                    DateBasis.SPENT, YearMonth.of(2026, 4), YearMonth.of(2026, 9),
+                )
+            } returns emptyList()
+
+            // when
+            val 결과 = statisticsService.recurringExpenses(DateBasis.SPENT, YearMonth.of(2026, 9))
+
+            // then
+            assertThat(결과.minimumMonths).isEqualTo(RecurringExpenseDetector.MINIMUM_MONTHS)
+        }
+
+        @Test
+        fun `기본 조회 구간은 6개월이다`() {
+            // given
+            every {
+                recurringExpenseQuery.findCandidates(
+                    DateBasis.SPENT, YearMonth.of(2026, 4), YearMonth.of(2026, 9),
+                )
+            } returns emptyList()
+
+            // when
+            val 결과 = statisticsService.recurringExpenses(DateBasis.SPENT, YearMonth.of(2026, 9))
+
+            // then
+            assertThat(결과.from).isEqualTo(YearMonth.of(2026, 4))
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = [0, 1, 2, 37])
+        fun `판정에 쓸 수 없는 구간은 거부한다`(windowMonths: Int) {
+            // 3개월 미만이면 반복 판정 자체가 불가능하고, 상한을 넘으면 조회가 과도하다
+            assertThatExceptionOfType(InvariantViolationException::class.java)
+                .isThrownBy {
+                    statisticsService.recurringExpenses(
+                        DateBasis.SPENT, YearMonth.of(2026, 9), windowMonths,
+                    )
+                }
+        }
+
+        @ParameterizedTest
+        @ValueSource(ints = [3, 36])
+        fun `구간 경계값은 허용한다`(windowMonths: Int) {
+            // given
+            every {
+                recurringExpenseQuery.findCandidates(DateBasis.SPENT, any(), YearMonth.of(2026, 9))
+            } returns emptyList()
+
+            // when & then
+            assertThatNoException().isThrownBy {
+                statisticsService.recurringExpenses(
+                    DateBasis.SPENT, YearMonth.of(2026, 9), windowMonths,
+                )
+            }
+        }
+    }
+
+    @Nested
+    @DisplayName("시간 축 소비 패턴")
+    inner class SpendingPatternCases {
+
+        private val 구월시작 = LocalDate.of(2026, 9, 1)
+        private val 구월종료 = LocalDate.of(2026, 9, 30)
+
+        @Test
+        fun `요일별 평균과 일별 누적을 함께 반환한다`() {
+            // given
+            every {
+                spendingPatternQuery.weekdayExpenses(DateBasis.SPENT, 구월시작, 구월종료)
+            } returns listOf(WeekdayExpense(DayOfWeek.SATURDAY, Money.of(360_000), 4))
+            every {
+                spendingPatternQuery.dailyExpenses(DateBasis.SPENT, 구월시작, 구월종료)
+            } returns listOf(DailyExpense(LocalDate.of(2026, 9, 5), Money.of(360_000), 4))
+
+            // when
+            val 결과 = statisticsService.spendingPattern(DateBasis.SPENT, 구월시작, 구월종료)
+
+            // then
+            assertThat(결과.weekdays).hasSize(7)
+            assertThat(결과.weekdays.first { it.dayOfWeek == DayOfWeek.SATURDAY }.average)
+                .isEqualTo(Money.of(90_000))
+            assertThat(결과.daily).hasSize(30)
+            assertThat(결과.daily.last().cumulative).isEqualTo(Money.of(360_000))
+        }
+
+        @Test
+        fun `시작일이 종료일보다 늦으면 거부한다`() {
+            assertThatExceptionOfType(InvariantViolationException::class.java)
+                .isThrownBy { statisticsService.spendingPattern(DateBasis.SPENT, 구월종료, 구월시작) }
         }
     }
 }

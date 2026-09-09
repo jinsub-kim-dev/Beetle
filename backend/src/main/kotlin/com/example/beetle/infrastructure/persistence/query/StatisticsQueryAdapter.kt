@@ -51,7 +51,7 @@ class StatisticsQueryAdapter(
             .map { it as Array<*> }
 
         val totals = rows.associate { row ->
-            CategoryType.valueOf(row[0] as String) to (row[1].toMoney() to row[2].toInt())
+            CategoryType.valueOf(row[0] as String) to (row[1].asMoney() to row[2].asInt())
         }
 
         return PeriodSummary(
@@ -87,12 +87,12 @@ class StatisticsQueryAdapter(
         .map { it as Array<*> }
         .map { row ->
             CategoryAggregate(
-                categoryId = CategoryId(row[0].toLongValue()),
+                categoryId = CategoryId(row[0].asLong()),
                 categoryName = row[1] as String,
                 type = CategoryType.valueOf(row[2] as String),
                 nature = (row[3] as String?)?.let(ExpenseNature::valueOf),
-                total = row[4].toMoney(),
-                transactionCount = row[5].toInt(),
+                total = row[4].asMoney(),
+                transactionCount = row[5].asInt(),
             )
         }
 
@@ -120,11 +120,11 @@ class StatisticsQueryAdapter(
         .map { it as Array<*> }
         .map { row ->
             PaymentMethodAggregate(
-                paymentMethodId = PaymentMethodId(row[0].toLongValue()),
+                paymentMethodId = PaymentMethodId(row[0].asLong()),
                 paymentMethodName = row[1] as String,
                 type = PaymentMethodType.valueOf(row[2] as String),
-                total = row[3].toMoney(),
-                transactionCount = row[4].toInt(),
+                total = row[3].asMoney(),
+                transactionCount = row[4].asInt(),
             )
         }
 
@@ -153,8 +153,8 @@ class StatisticsQueryAdapter(
         .map { row ->
             ExpenseNatureAggregate(
                 nature = ExpenseNature.valueOf(row[0] as String),
-                total = row[1].toMoney(),
-                transactionCount = row[2].toInt(),
+                total = row[1].asMoney(),
+                transactionCount = row[2].asInt(),
             )
         }
 
@@ -175,7 +175,7 @@ class StatisticsQueryAdapter(
             .setParameter("to", to)
             .singleResult
 
-        return result.toMoney()
+        return result.asMoney()
     }
 
     override fun monthlyTrend(
@@ -201,7 +201,7 @@ class StatisticsQueryAdapter(
             .resultList
             .map { it as Array<*> }
 
-        val byMonth = rows.groupBy { YearMonth.of(it[0].toInt(), it[1].toInt()) }
+        val byMonth = rows.groupBy { YearMonth.of(it[0].asInt(), it[1].asInt()) }
 
         // 거래가 없는 월도 0원으로 채워, 추이 그래프에 구멍이 생기지 않게 한다.
         return generateSequence(from) { it.plusMonths(1) }
@@ -242,34 +242,15 @@ class StatisticsQueryAdapter(
         .map { it as Array<*> }
         .map { row ->
             MonthlyCategoryExpense(
-                categoryId = CategoryId(row[0].toLongValue()),
+                categoryId = CategoryId(row[0].asLong()),
                 categoryName = row[1] as String,
                 // 지출만 조회하므로 성격은 항상 존재한다 (PRD 2-②).
                 nature = ExpenseNature.valueOf(row[2] as String),
-                yearMonth = YearMonth.of(row[3].toInt(), row[4].toInt()),
-                total = row[5].toMoney(),
+                yearMonth = YearMonth.of(row[3].asInt(), row[4].asInt()),
+                total = row[5].asMoney(),
             )
         }
 
     private fun List<Array<*>>.amountOf(type: CategoryType): Money =
-        firstOrNull { it[2] as String == type.name }?.get(3)?.toMoney() ?: Money.ZERO
-
-    /**
-     * 기간 필터에 사용할 컬럼명.
-     *
-     * 열거형에서만 파생되는 값이므로 SQL 문자열에 삽입해도 주입 위험이 없다.
-     * 사용자 입력이 이 자리에 오는 일은 없다.
-     */
-    private val DateBasis.dateColumn: String
-        get() = when (this) {
-            DateBasis.SPENT -> "spent_date"
-            DateBasis.BILL -> "bill_date"
-        }
-
-    /** MySQL 의 SUM 은 JDBC 에서 BigDecimal 로, COUNT 는 Long 으로 넘어온다. */
-    private fun Any?.toMoney(): Money = Money.of((this as Number).toLong())
-
-    private fun Any?.toLongValue(): Long = (this as Number).toLong()
-
-    private fun Any?.toInt(): Int = (this as Number).toInt()
+        firstOrNull { it[2] as String == type.name }?.get(3)?.asMoney() ?: Money.ZERO
 }

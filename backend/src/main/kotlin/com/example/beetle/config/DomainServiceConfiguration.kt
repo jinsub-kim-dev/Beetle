@@ -2,7 +2,9 @@ package com.example.beetle.config
 
 import com.example.beetle.domain.service.BillDateCalculator
 import com.example.beetle.domain.service.InstallmentScheduler
+import com.example.beetle.domain.service.RecurringExpenseDetector
 import com.example.beetle.domain.service.SpendingAnomalyDetector
+import com.example.beetle.domain.service.SpendingPatternAnalyzer
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 
@@ -24,4 +26,10 @@ class DomainServiceConfiguration {
 
     @Bean
     fun spendingAnomalyDetector(): SpendingAnomalyDetector = SpendingAnomalyDetector()
+
+    @Bean
+    fun recurringExpenseDetector(): RecurringExpenseDetector = RecurringExpenseDetector()
+
+    @Bean
+    fun spendingPatternAnalyzer(): SpendingPatternAnalyzer = SpendingPatternAnalyzer()
 }

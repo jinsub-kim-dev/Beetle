@@ -12,6 +12,9 @@ import com.example.beetle.presentation.dto.MonthComparisonResponse
 import com.example.beetle.presentation.dto.MonthlySummaryResponse
 import com.example.beetle.presentation.dto.PaymentMethodBreakdownResponse
 import com.example.beetle.presentation.dto.PeriodSummaryResponse
+import com.example.beetle.presentation.dto.RecurringExpenseResponse
+import com.example.beetle.presentation.dto.SpendingPatternResponse
+import com.example.beetle.presentation.dto.DEFAULT_RECURRING_WINDOW_MONTHS
 import com.example.beetle.presentation.dto.UpcomingBillsResponse
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.web.bind.annotation.GetMapping
@@ -107,6 +110,34 @@ class StatisticsController(
             baselineMonths = baselineMonths ?: DEFAULT_ANOMALY_BASELINE_MONTHS,
         ),
     )
+
+    /**
+     * 매달 반복되는 지출(구독·정기 결제) 점검.
+     *
+     * 월 9,900원은 눈에 띄지 않지만 연간 환산액으로 보면 결정이 달라진다.
+     */
+    @GetMapping("/recurring-expenses")
+    fun recurringExpenses(
+        @RequestParam(defaultValue = "SPENT") basis: DateBasis,
+        @RequestParam @DateTimeFormat(pattern = "yyyy-MM") month: YearMonth,
+        // 어노테이션의 defaultValue 는 컴파일 타임 상수만 받으므로 문자열 템플릿을 쓸 수 없다.
+        @RequestParam(required = false) windowMonths: Int?,
+    ): RecurringExpenseResponse = RecurringExpenseResponse.from(
+        statisticsUseCase.recurringExpenses(
+            basis = basis,
+            month = month,
+            windowMonths = windowMonths ?: DEFAULT_RECURRING_WINDOW_MONTHS,
+        ),
+    )
+
+    /** 요일별 평균과 일별 누적. "무엇에 썼나" 를 넘어 "언제 쓰는가" 를 본다. */
+    @GetMapping("/spending-pattern")
+    fun spendingPattern(
+        @RequestParam(defaultValue = "SPENT") basis: DateBasis,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) from: LocalDate,
+        @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) to: LocalDate,
+    ): SpendingPatternResponse =
+        SpendingPatternResponse.from(statisticsUseCase.spendingPattern(basis, from, to))
 
     @GetMapping("/monthly-trend")
     fun monthlyTrend(
