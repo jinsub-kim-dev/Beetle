@@ -1,6 +1,7 @@
 import { BarChart3, LayoutDashboard, Plus, Receipt, Settings } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
+import { APP_ENVIRONMENT, IS_DEV_ENVIRONMENT } from '@/config/env'
 import { TransactionFormDialog } from '@/features/transactions/TransactionFormDialog'
 import { cn } from '@/lib/utils'
 import { useUiStore } from '@/store/uiStore'
@@ -20,7 +21,19 @@ export function AppLayout() {
       <header className="border-b">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-lg font-bold">Beetle</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold">Beetle</h1>
+              {/* 로컬 화면을 배포 화면으로 착각하고 데이터를 넣는 일을 막는다.
+                  배포 환경에서는 배지를 띄우지 않는다. */}
+              {IS_DEV_ENVIRONMENT && (
+                <span
+                  className="border-warning/40 bg-warning/10 text-warning rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+                  title={`실행 환경: ${APP_ENVIRONMENT}`}
+                >
+                  LOCAL
+                </span>
+              )}
+            </div>
             <p className="text-muted-foreground text-xs">개인 맞춤형 가계부</p>
           </div>
 

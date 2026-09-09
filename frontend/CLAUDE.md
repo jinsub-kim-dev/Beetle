@@ -17,6 +17,7 @@ frontend/src/
  ┣ hooks/                  # 공통 커스텀 훅
  ┣ store/                  # 전역 상태 관리 (Zustand)
  ┣ api/                    # 백엔드 API 연동 클라이언트 설정 (Axios / Fetch)
+ ┣ config/                 # 실행 환경 설정 해석 (env)
  ┣ types/                  # TypeScript 공통 타입 및 인터페이스 정의
  ┣ lib/                    # 프레임워크에 독립적인 순수 로직 (포맷터, 기간 계산, cn 유틸)
  ┣ pages/                  # 페이지 단위 컴포넌트 (Dashboard, Transactions, Settings 등)
@@ -134,16 +135,38 @@ frontend/src/
 
 ---
 
-## 6. 빌드 및 개발 명령어 (`frontend` 디렉토리 기준)
+## 6. 환경 분리 (dev / prod)
+
+Vite 의 **모드**로 나눕니다. 모드에 따라 `.env` 파일이 자동으로 선택됩니다.
+
+| 모드 | 파일 | 사용하는 명령 |
+|---|---|---|
+| `development` (로컬) | `.env.development` | `npm run dev`, `npm run build:dev` |
+| `production` (배포) | `.env.production` | `npm run build` |
+
+- 두 파일은 **커밋됩니다.** 프론트엔드 빌드 결과물은 브라우저로 그대로 내려가므로, 여기에
+  넣은 값은 공개된다고 보아야 합니다. **비밀 값을 넣지 마십시오.**
+- 개인 환경에서만 값을 바꾸려면 `.env.development.local` 을 만듭니다. (`*.local` 은 커밋되지 않음)
+- **`import.meta.env` 를 화면 코드에서 직접 읽지 않습니다.** `config/env.ts` 를 거칩니다.
+  값의 해석 규칙(빈 문자열은 미설정, 알 수 없는 값은 dev)이 여러 곳에 흩어지면 환경에 따라
+  다르게 동작하는 원인을 추적할 수 없습니다.
+- 환경 판별에 실패하면 **dev 로 봅니다.** 배포로 간주하면 개발 중인 화면이 배포 화면처럼
+  보입니다. 로컬에서는 헤더에 `LOCAL` 배지를 띄워, 로컬 화면에 실제 데이터를 넣는 실수를 막습니다.
+- 배포 빌드에는 **소스맵을 넣지 않습니다.** 원본 코드가 그대로 노출됩니다.
+
+---
+
+## 7. 빌드 및 개발 명령어 (`frontend` 디렉토리 기준)
 - **개발 서버 실행:** `npm run dev` (백엔드로 `/api` 프록시. 대상은 `VITE_API_PROXY_TARGET`)
-- **프로덕션 빌드:** `npm run build` (타입 검사 후 빌드)
+- **배포 빌드:** `npm run build` (타입 검사 후 production 모드 빌드)
+- **로컬 확인용 빌드:** `npm run build:dev` (development 모드. 소스맵 포함, 미압축)
 - **타입 검사:** `npm run tsc`
 - **린트:** `npm run lint` / `npm run lint:fix`
 - **포맷:** `npm run format`
 - **테스트:** `npm run test` / `npm run test:watch` / `npm run test:coverage`
 - **전체 검증:** `npm run check` (타입 + 린트 + 테스트)
 
-### 6.1 패키지 레지스트리
+### 7.1 패키지 레지스트리
 프로젝트 로컬 `.npmrc` 가 공개 npm 레지스트리를 명시합니다. 전역 `~/.npmrc` 가 사내 사설
 레지스트리를 가리키는 환경에서도 개인 프로젝트의 설치가 실패하지 않도록 하기 위한 것입니다.
 이 파일을 지우지 마십시오.

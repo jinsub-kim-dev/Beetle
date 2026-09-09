@@ -1,14 +1,16 @@
 import axios, { AxiosError, type AxiosInstance } from 'axios'
+import { API_BASE_URL } from '@/config/env'
 import type { ApiErrorResponse } from '@/types/api'
 
 /**
  * 백엔드 API 클라이언트.
  *
- * 개발 서버는 `/api` 를 백엔드로 프록시하므로 기본 baseURL 은 상대 경로다.
- * 배포 환경에서 오리진이 다르면 `VITE_API_BASE_URL` 로 지정한다.
+ * 개발 서버와 배포 nginx 모두 `/api` 를 백엔드로 프록시하므로 기본 baseURL 은
+ * 상대 경로다. 오리진이 다른 배포에서는 `VITE_API_BASE_URL` 로 지정한다.
+ * 해석 규칙은 `config/env.ts` 가 갖는다.
  */
 export const apiClient: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? '',
+  baseURL: API_BASE_URL,
   headers: { 'Content-Type': 'application/json' },
   timeout: 10_000,
 })

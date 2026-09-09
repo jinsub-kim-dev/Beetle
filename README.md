@@ -46,10 +46,14 @@
 - Docker (Docker Desktop / Rancher Desktop / Colima 모두 가능)
 - 로컬에서 직접 빌드하려면 JDK 17
 
-### 전체 실행 (권장)
+### 로컬(dev) 실행 — 기본
 ```bash
-docker-compose up --build -d
+docker compose up --build -d
 ```
+
+`docker-compose.override.yml` 이 자동으로 함께 적용되어 로컬 환경으로 뜬다.
+**로컬이 기본값**이며, 배포는 명시해야 한다. 설정을 빠뜨렸을 때 운영이 아니라 로컬로
+뜨는 방향이 안전하다.
 
 - **웹 화면: http://localhost:5173**
 - 백엔드: http://localhost:8080
@@ -61,11 +65,38 @@ docker-compose up --build -d
 
 종료:
 ```bash
-docker-compose down
+docker compose down
 ```
 
 데이터는 Docker Volume(`beetle-mysql-data`)에 보존되므로 컨테이너를 재생성해도 남는다.
-데이터까지 지우려면 `docker-compose down -v` 를 사용한다.
+데이터까지 지우려면 `docker compose down -v` 를 사용한다.
+
+### 배포(prod) 실행
+```bash
+cp .env.example .env       # DB 계정과 비밀번호를 실제 값으로 채운다
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build -d
+```
+
+- 외부에 노출되는 것은 **프론트엔드 하나뿐**이다(기본 `:80`). 백엔드와 MySQL 포트는
+  호스트에 열지 않는다.
+- **접속 정보가 없으면 기동에 실패한다.** 기본 비밀번호로 배포되는 것보다 뜨지 않는 편이 낫다.
+- 시드 데이터(`db/seed`)를 적용하지 않으므로 빈 상태로 시작한다.
+- API 문서(`/swagger-ui.html`, `/v3/api-docs`)와 `health` 외의 관리 엔드포인트는 404 다.
+
+| 항목 | 로컬(dev) | 배포(prod) |
+|---|---|---|
+| 백엔드 설정 | `application-dev.yml` (프로필 미지정 시 기본) | `application-prod.yml` |
+| 프론트엔드 설정 | `.env.development` | `.env.production` |
+| 컨테이너 | `docker-compose.override.yml` (자동) | `docker-compose.prod.yml` (`-f` 로 명시) |
+| DB 접속 정보 | 기본값 있음 | 없으면 기동 실패 |
+| 시드 데이터 | 적용 | 미적용 |
+| API 문서 | 노출 | 차단 |
+| 노출 포트 | 프론트·백엔드·MySQL | 프론트엔드만 |
+| 프론트엔드 소스맵 | 포함 | 미포함 |
+| 화면 배지 | `LOCAL` | 없음 |
+
+이 차이는 `ProfileConfigurationTest` 가 설정 파일을 직접 읽어 검증한다. 설정을 고치다
+정책을 깨면 `./gradlew check` 가 실패한다.
 
 ### 포트가 이미 사용 중일 때
 `.env.example` 을 `.env` 로 복사해 포트를 바꾼다.
@@ -73,7 +104,7 @@ docker-compose down
 ```bash
 cp .env.example .env
 # .env 에서 FRONTEND_PORT=15173, BACKEND_PORT=18080 등으로 수정
-docker-compose up -d
+docker compose up -d
 ```
 
 > 8080 포트를 다른 프로세스가 점유하고 있으면 컨테이너는 정상 기동하지만 호스트에서
@@ -83,19 +114,19 @@ docker-compose up -d
 
 백엔드만 IDE 에서 실행:
 ```bash
-docker-compose up -d mysql
+docker compose up -d mysql
 cd backend && ./gradlew bootRun
 ```
-`application.yml` 의 DataSource 는 환경 변수 기반이며 기본값이 `localhost:3306` 이므로
-추가 설정 없이 붙는다.
+프로필을 지정하지 않으면 dev 로 뜬다. `application-dev.yml` 의 DataSource 기본값이
+`localhost:3306` 이므로 추가 설정 없이 붙는다.
 
 프론트엔드를 Vite 개발 서버(HMR)로 실행:
 ```bash
-docker-compose up -d mysql backend
+docker compose up -d mysql backend
 cd frontend && npm install && npm run dev
 ```
 Vite 가 `/api` 를 `http://localhost:8080` 으로 프록시한다. 백엔드 포트를 바꿨다면
-`frontend/.env` 의 `VITE_API_PROXY_TARGET` 도 맞춘다.
+`frontend/.env.development.local` 에 `VITE_API_PROXY_TARGET` 을 지정한다.
 
 ---
 
@@ -122,6 +153,7 @@ cd frontend && npm run check
 | `ArchitectureTest` | 레이어 의존 방향, 도메인의 프레임워크 독립성, JPA 엔티티 노출 금지 |
 | `DomainModelConventionTest` | 애그리거트 루트의 `data class` 금지, 식별자 기반 동일성 |
 | `MockKValueClassConventionTest` | 값 객체 파라미터에 `any()` 매처 사용 금지 (flaky 테스트 방지) |
+| `ProfileConfigurationTest` | 환경별 설정 정책 (배포에 시드 금지, 접속 정보 기본값 금지 등) |
 | JaCoCo 커버리지 검증 | 도메인 레이어 분기 커버리지 90% 이상 |
 | Vitest `thresholds` (frontend) | `lib/`·`store/` 순수 로직 커버리지 90% 이상 |
 | ESLint `no-explicit-any` (frontend) | `any` 배제 |
@@ -132,10 +164,12 @@ cd frontend && npm run check
 
 ```text
 Beetle/
- ┣ BEETLE_PRD.md      기획 및 요구사항 정의서
- ┣ docker-compose.yml MySQL + 백엔드 + 프론트엔드 통합 실행
- ┣ backend/           Spring Boot 4 + Kotlin (클린 아키텍처 + DDD)
- ┗ frontend/          React + Vite + TypeScript (Tailwind, TanStack Query, Zustand)
+ ┣ BEETLE_PRD.md               기획 및 요구사항 정의서
+ ┣ docker-compose.yml          MySQL + 백엔드 + 프론트엔드 공통 구성
+ ┣ docker-compose.override.yml 로컬(dev) 구성 — 자동 적용
+ ┣ docker-compose.prod.yml     배포(prod) 구성 — -f 로 명시
+ ┣ backend/                    Spring Boot 4 + Kotlin (클린 아키텍처 + DDD)
+ ┗ frontend/                   React + Vite + TypeScript (Tailwind, TanStack Query, Zustand)
 ```
 
 백엔드는 `domain` → `application` → `infrastructure`/`presentation` 4계층이며,

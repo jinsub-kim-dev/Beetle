@@ -1,0 +1,40 @@
+# 배포(prod) 환경 구성.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# 로컬 파일(docker-compose.override.yml)은 `-f` 를 명시하면 적용되지 않는다.
+#
+# 접속 정보에는 기본값을 두지 않는다. 값이 없으면 기동에 실패하며, 이 편이 안전하다.
+# 기본 비밀번호로 배포되는 것보다 뜨지 않는 것이 낫다.
+services:
+  mysql:
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 를 설정해야 합니다}
+      MYSQL_DATABASE: ${DB_NAME:?DB_NAME 을 설정해야 합니다}
+      MYSQL_USER: ${DB_USER:?DB_USER 를 설정해야 합니다}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 설정해야 합니다}
+    # DB 포트를 호스트에 노출하지 않는다. 백엔드는 compose 네트워크로 접속한다.
+    restart: unless-stopped
+
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME:?DB_NAME 을 설정해야 합니다}
+      DB_USER: ${DB_USER:?DB_USER 를 설정해야 합니다}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 설정해야 합니다}
+      DB_POOL_SIZE: ${DB_POOL_SIZE:-20}
+      TZ: Asia/Seoul
+    # 백엔드 포트도 노출하지 않는다. 브라우저가 보는 오리진은 프론트엔드 하나이며
+    # nginx 가 /api 를 백엔드로 프록시한다. API 문서도 prod 프로필에서 꺼져 있다.
+    restart: unless-stopped
+
+  frontend:
+    build:
+      args:
+        BUILD_MODE: production
+    # 외부에 노출하는 것은 이 하나뿐이다.
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    restart: unless-stopped

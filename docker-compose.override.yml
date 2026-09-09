@@ -1,0 +1,27 @@
+# 로컬(dev) 환경 구성.
+#
+# Compose 가 **자동으로** 함께 읽는 파일이므로 `docker compose up -d` 만으로 로컬
+# 환경이 뜬다. 로컬이 기본이라는 뜻이다.
+#
+# 이 파일은 팀 공용 로컬 기본값이며 **커밋된다.** 개인 환경에서 포트나 비밀번호를
+# 바꾸려면 이 파일을 고치지 않고 `.env` 를 만든다. (`.env.example` 참고)
+services:
+  mysql:
+    # 로컬에서는 DB 에 직접 붙어 확인할 일이 많으므로 포트를 노출한다.
+    ports:
+      - "${DB_PORT:-3306}:3306"
+
+  backend:
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+    # 프론트엔드를 거치지 않고 API 와 Swagger UI 를 직접 열 수 있게 노출한다.
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+
+  frontend:
+    build:
+      args:
+        # 로컬 확인용 이미지는 소스맵을 포함한다.
+        BUILD_MODE: ${FRONTEND_BUILD_MODE:-development}
+    ports:
+      - "${FRONTEND_PORT:-5173}:80"

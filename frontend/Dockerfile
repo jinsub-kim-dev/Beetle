@@ -9,7 +9,11 @@ COPY package.json package-lock.json .npmrc ./
 RUN npm ci
 
 COPY . .
-RUN npm run build
+
+# 빌드 모드. 기본은 배포(production) 산출물이다.
+# 소스맵이 필요한 확인용 이미지는 `--build-arg BUILD_MODE=development` 로 만든다.
+ARG BUILD_MODE=production
+RUN if [ "$BUILD_MODE" = "development" ]; then npm run build:dev; else npm run build; fi
 
 # --- Runtime stage ---
 FROM nginx:alpine

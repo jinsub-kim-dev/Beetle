@@ -1,13 +1,24 @@
+# 프로필과 무관한 공통 설정.
+#
+# 환경별로 달라지는 값은 application-dev.yml / application-prod.yml 에 둔다.
+# 프로필을 지정하지 않으면 dev(로컬)로 동작한다. 배포는 SPRING_PROFILES_ACTIVE=prod 로
+# 명시해야 하며, 이 방향이 안전하다. 실수로 프로필을 빼먹었을 때 운영 설정이 아니라
+# 로컬 설정으로 뜬다.
 spring:
   application:
     name: beetle
 
+  profiles:
+    default: dev
+
   datasource:
-    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:beetle}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
-    username: ${DB_USER:beetle}
-    password: ${DB_PASSWORD:beetlepassword}
+    # 접속 정보의 기본값 정책은 프로필이 정한다 (beetle.db.*).
+    # URL 은 한 곳에만 두어 접속 옵션(타임존·인코딩)이 환경별로 어긋나지 않게 한다.
+    url: jdbc:mysql://${beetle.db.host}:${beetle.db.port}/${beetle.db.name}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul&characterEncoding=UTF-8
+    username: ${beetle.db.user}
+    password: ${beetle.db.password}
     hikari:
-      maximum-pool-size: 10
+      maximum-pool-size: ${DB_POOL_SIZE:10}
       connection-timeout: 10000
 
   jpa:
@@ -17,16 +28,14 @@ spring:
     open-in-view: false
     properties:
       hibernate:
-        format_sql: true
         jdbc:
           time_zone: Asia/Seoul
 
   flyway:
     enabled: true
     # 스키마(db/migration)와 시드 데이터(db/seed)를 분리한다.
-    # 테스트는 빈 DB 를 전제하므로 db/migration 만 적용한다.
-    locations: classpath:db/migration,classpath:db/seed
-    baseline-on-migrate: true
+    # 시드 적용 여부는 프로필이 정한다. 공통 설정은 스키마만 적용한다.
+    locations: classpath:db/migration
 
   jackson:
     # Jackson 3 은 날짜/시간을 기본적으로 ISO-8601 문자열로 직렬화한다.
@@ -34,17 +43,10 @@ spring:
     default-property-inclusion: non_null
 
 server:
-  port: 8080
+  port: ${SERVER_PORT:8080}
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
-  endpoint:
-    health:
-      show-details: when-authorized
-
-logging:
-  level:
-    com.example.beetle: DEBUG

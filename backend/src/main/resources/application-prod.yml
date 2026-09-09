@@ -1,0 +1,63 @@
+# 배포 프로필.
+#
+# 접속 정보에 **기본값을 두지 않는다.** 환경 변수가 없으면 기동 시점에 실패하며,
+# 이 편이 안전하다. 기본값이 있으면 설정을 빠뜨린 채로 뜬 뒤 엉뚱한 DB 에 붙거나
+# 인증이 실패하는 시점까지 문제가 드러나지 않는다.
+beetle:
+  db:
+    host: ${DB_HOST}
+    port: ${DB_PORT:3306}
+    name: ${DB_NAME}
+    user: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:20}
+
+  flyway:
+    # 시드 데이터(db/seed)는 데모용이므로 배포 환경에 적용하지 않는다.
+    locations: classpath:db/migration
+    # 기존 스키마를 자동으로 기준선 처리하지 않는다. 비어 있지 않은 DB 에
+    # 처음 배포하면 실패해야 하며, 그때 사람이 판단해야 한다.
+    baseline-on-migrate: false
+    clean-disabled: true
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+server:
+  error:
+    # 예외 메시지와 스택을 응답에 담지 않는다. 오류 응답 규약(PRD 7.1)의
+    # code/message 만 노출한다.
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+  # 진행 중인 요청을 마치고 종료한다.
+  shutdown: graceful
+
+# API 문서를 노출하지 않는다.
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # 헬스체크만 노출한다. env/beans 는 설정과 내부 구조를 드러낸다.
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    com.example.beetle: INFO

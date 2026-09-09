@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 
 /**
  * 전체 애플리케이션 컨텍스트 스모크 테스트.
@@ -19,8 +20,12 @@ import org.springframework.context.annotation.Import
  *
  * 이 테스트는 시드 데이터(`db/seed`)를 포함한 전체 마이그레이션이 적용되는 유일한
  * 지점이므로, 시드 SQL 의 정합성도 함께 검증한다.
+ *
+ * 프로필을 명시하는 이유: 시드 적용은 dev 프로필의 정책이다. 쉘에 `SPRING_PROFILES_ACTIVE`
+ * 가 설정되어 있으면 다른 프로필로 뜨면서 이 테스트의 전제가 조용히 깨진다.
  */
 @SpringBootTest
+@ActiveProfiles("dev")
 @Import(TestcontainersConfiguration::class)
 @DisplayName("애플리케이션 컨텍스트")
 class BeetleApplicationTests {

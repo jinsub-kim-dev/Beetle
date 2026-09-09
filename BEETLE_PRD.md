@@ -386,12 +386,25 @@ Beetle/                        # 루트 디렉토리
 
 ## 6. 인프라 및 실행 환경
 - **로컬 개발 환경:** MySQL, Spring Boot 앱, 웹 클라이언트를 모두 로컬 Docker 컨테이너 (`docker-compose.yml`)로 구성하여 구동
+- **환경 분리:** 로컬(dev)과 배포(prod)를 나눠 관리하며 **로컬이 기본값**입니다. 프로필이나
+  파일 지정을 빠뜨렸을 때 운영 설정이 아니라 로컬 설정으로 뜨는 방향이 안전합니다.
+
+  | 영역 | 로컬(dev) | 배포(prod) |
+  |---|---|---|
+  | 백엔드 | `application-dev.yml` (미지정 시 기본) | `application-prod.yml` (`SPRING_PROFILES_ACTIVE=prod`) |
+  | 프론트엔드 | `.env.development` | `.env.production` |
+  | 컨테이너 | `docker-compose.override.yml` (자동 적용) | `docker-compose.prod.yml` (`-f` 로 명시) |
+
+  배포 환경은 **접속 정보에 기본값을 두지 않아 없으면 기동에 실패**하고, **시드 데이터를
+  적용하지 않으며**, API 문서와 관리 엔드포인트(health 제외)를 차단하고, 프론트엔드 포트만
+  호스트에 노출합니다. 이 정책은 `ProfileConfigurationTest` 가 설정 파일을 읽어 검증합니다
 - **데이터 영속성:** Docker Volume을 활용하여 MySQL 데이터 유실 방지
 - **스키마 관리:** Flyway 로만 관리하며 Hibernate 는 `ddl-auto=validate` 로 검증만 수행합니다. 스키마(`db/migration`)와 시드 데이터(`db/seed`)를 분리해, 빈 DB 를 전제로 하는 테스트에는 시드를 적용하지 않습니다.
 - **통합 테스트:** H2 대신 **Testcontainers 로 실제 MySQL** 을 사용합니다. 방언 차이로 인한 거짓 통과·거짓 실패를 막기 위함입니다.
 - **오리진 통일:** 프론트엔드 컨테이너의 nginx 가 `/api` 를 백엔드로 프록시합니다. 브라우저가 보는 오리진이 하나로 유지되므로 CORS 설정이 필요하지 않습니다. 개발 시에는 Vite 개발 서버가 같은 역할을 합니다.
-- **접속 주소:** 프론트엔드 `:5173`, 백엔드 `:8080`, MySQL `:3306` (`.env` 로 변경 가능)
-- **API 문서:** springdoc-openapi 로 `/swagger-ui.html`, `/v3/api-docs` 제공
+- **접속 주소:** 로컬은 프론트엔드 `:5173`, 백엔드 `:8080`, MySQL `:3306` (`.env` 로 변경 가능).
+  배포는 프론트엔드만 노출합니다(기본 `:80`)
+- **API 문서:** springdoc-openapi 로 `/swagger-ui.html`, `/v3/api-docs` 제공 (**로컬 전용**)
 - **AI 협업 가이드 (`CLAUDE.md`):**
   - 루트의 `CLAUDE.md` 는 모노레포 전반, 인프라 실행, 전 영역 공통 개발 원칙을 담당합니다.
   - `backend/CLAUDE.md` 는 아키텍처 규칙, 패키지 구조, DDD 전술 설계, 코틀린 컨벤션, 테스트 정책을 정의합니다.

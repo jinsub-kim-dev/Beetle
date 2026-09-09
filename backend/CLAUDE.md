@@ -203,14 +203,44 @@ com.example.beetle
 
 ---
 
-## 7. 빌드 및 테스트 명령어 (`backend` 디렉토리 기준)
+## 7. 환경별 설정 (프로필)
+
+설정 파일은 세 개이며 역할이 다릅니다.
+
+| 파일 | 역할 |
+|---|---|
+| `application.yml` | 프로필과 무관한 공통 설정. `spring.profiles.default: dev` |
+| `application-dev.yml` | 로컬. 환경 변수 없이도 뜨도록 기본값을 둔다 |
+| `application-prod.yml` | 배포. 접속 정보에 **기본값을 두지 않는다** |
+
+- **접속 URL 은 `application.yml` 에만 둡니다.** 프로필마다 URL 을 따로 쓰면 타임존·인코딩
+  옵션이 환경별로 어긋납니다. 대신 `beetle.db.*` 로 값만 프로필이 정합니다. 기본값을 둘지
+  말지가 프로필의 정책입니다.
+- **배포 프로필은 환경 변수가 없으면 기동에 실패합니다.** 이것이 요구사항입니다. 기본값이
+  있으면 설정을 빠뜨린 채로 떠서 엉뚱한 DB 에 붙거나, 인증이 실패하는 시점까지 문제가
+  드러나지 않습니다.
+- 시드 데이터(`db/seed`)는 **dev 에만** 적용합니다. 공통 설정은 스키마(`db/migration`)만
+  적용하므로, 프로필을 추가할 때 시드가 딸려 들어가지 않습니다.
+- 환경별 정책(시드 적용, 기본값 금지, 문서·관리 엔드포인트 차단 등)은 `ProfileConfigurationTest`
+  가 설정 파일을 직접 읽어 검증합니다. 설정을 고치다 규칙을 깨면 `./gradlew check` 가 실패합니다.
+- **테스트는 프로필을 명시합니다.** `@ActiveProfiles("dev")` 를 붙이지 않으면 쉘의
+  `SPRING_PROFILES_ACTIVE` 에 따라 테스트 설정이 바뀝니다.
+
+---
+
+## 8. 빌드 및 테스트 명령어 (`backend` 디렉토리 기준)
 - **빌드:** `./gradlew build`
 - **테스트:** `./gradlew test`
 - **아키텍처 규칙만 검증:** `./gradlew test --tests '*ArchitectureTest'`
+- **로컬 실행:** `./gradlew bootRun` (프로필 미지정 = dev)
+- **배포 프로필로 실행:** `SPRING_PROFILES_ACTIVE=prod DB_HOST=... DB_NAME=... DB_USER=... DB_PASSWORD=... ./gradlew bootRun`
 
-### 7.1 테스트에 필요한 의존성 (Phase 1에서 추가)
-5절 정책을 실행하려면 아래가 필요합니다. 현재 `build.gradle.kts`에는 `kotlin-test-junit5`만 있습니다.
+### 8.1 테스트 의존성
+5절 정책을 실행하는 의존성입니다. 모두 `build.gradle.kts` 에 반영되어 있습니다.
 - `com.tngtech.archunit:archunit-junit5` — 3절 규칙 강제
 - `io.mockk:mockk` — 애플리케이션 서비스 단위 테스트
 - `org.assertj:assertj-core` — 단정문
-- `org.springframework.boot:spring-boot-testcontainers` + `org.testcontainers:mysql` — 영속성 통합 테스트
+- `org.springframework.boot:spring-boot-testcontainers` +
+  `org.testcontainers:testcontainers-mysql` + `org.testcontainers:testcontainers-junit-jupiter`
+  — 영속성 통합 테스트. **Testcontainers 2.x 는 모듈 좌표가 `testcontainers-*` 로 바뀌었고**
+  MySQL 컨테이너 클래스도 `org.testcontainers.mysql.MySQLContainer` 로 이동했습니다

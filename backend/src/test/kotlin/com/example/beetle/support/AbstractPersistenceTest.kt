@@ -23,6 +23,7 @@ import org.springframework.boot.flyway.autoconfigure.FlywayAutoConfiguration
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase
 import org.springframework.boot.jpa.test.autoconfigure.TestEntityManager
 import org.springframework.context.annotation.Import
+import org.springframework.test.context.ActiveProfiles
 
 /**
  * 영속성 통합 테스트 기반 클래스.
@@ -38,6 +39,8 @@ import org.springframework.context.annotation.Import
  */
 // 영속성 테스트는 빈 DB 를 전제로 검증하므로 시드 데이터(db/seed)를 적용하지 않는다.
 // 시드 SQL 자체의 정합성은 BeetleApplicationTests 가 전체 컨텍스트를 띄우며 검증한다.
+// 프로필을 고정한다. 쉘의 `SPRING_PROFILES_ACTIVE` 에 따라 테스트 설정이 바뀌면 안 된다.
+@ActiveProfiles("dev")
 @DataJpaTest(properties = ["spring.flyway.locations=classpath:db/migration"])
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 // @DataJpaTest 슬라이스는 Flyway 자동 구성을 포함하지 않는다. 명시적으로 넣어야

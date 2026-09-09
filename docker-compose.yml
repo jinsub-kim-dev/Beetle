@@ -1,3 +1,13 @@
+# 환경 공통 구성.
+#
+# 이 파일 하나로는 호스트에 포트를 노출하지 않는다. 환경별 파일이 노출을 정한다.
+#
+#   로컬(dev):  docker compose up -d --build
+#               -> docker-compose.override.yml 이 자동으로 함께 적용된다
+#   배포(prod): docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+#
+# Compose 는 리스트 필드(ports 등)를 덮어쓰지 않고 **병합**한다. 그래서 공통 파일에
+# 포트를 두면 배포 파일에서 되돌릴 수 없다. 노출은 환경별 파일에서만 선언한다.
 services:
   mysql:
     image: mysql:8.4
@@ -12,8 +22,6 @@ services:
       - --character-set-server=utf8mb4
       - --collation-server=utf8mb4_unicode_ci
       - --default-time-zone=+09:00
-    ports:
-      - "${DB_PORT:-3306}:3306"
     volumes:
       # Docker Volume 으로 데이터 영속성 확보 (컨테이너 재생성에도 데이터 유지)
       - beetle-mysql-data:/var/lib/mysql
@@ -29,14 +37,14 @@ services:
       context: ./backend
     container_name: beetle-backend
     environment:
+      # 스프링 프로필은 환경별 파일이 지정한다. 지정하지 않으면 애플리케이션이
+      # dev 로 뜬다 (application.yml 의 spring.profiles.default).
       DB_HOST: mysql
       DB_PORT: 3306
       DB_NAME: ${DB_NAME:-beetle}
       DB_USER: ${DB_USER:-beetle}
       DB_PASSWORD: ${DB_PASSWORD:-beetlepassword}
       TZ: Asia/Seoul
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       mysql:
         condition: service_healthy
@@ -44,11 +52,12 @@ services:
   frontend:
     build:
       context: ./frontend
+      args:
+        # 빌드 모드는 환경별 파일이 지정한다. Dockerfile 기본값은 production 이다.
+        BUILD_MODE: ${FRONTEND_BUILD_MODE:-production}
     container_name: beetle-frontend
     environment:
       TZ: Asia/Seoul
-    ports:
-      - "${FRONTEND_PORT:-5173}:80"
     depends_on:
       - backend
 
