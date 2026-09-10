@@ -402,7 +402,7 @@
 Beetle/                        # 루트 디렉토리
  ┣ BEETLE_PRD.md               # 전체 프로젝트 기획 및 요구사항 정의서 (도메인 요구사항의 정본)
  ┣ CLAUDE.md                   # 루트 프로젝트(인프라/모노레포/공통 원칙) 가이드
- ┣ README.md                   # 실행 및 개발 안내
+ ┣ README.md                   # 로컬 실행과 원격 배포 안내
  ┣ docker-compose.yml          # 로컬 인프라 (MySQL + 백엔드 + 프론트엔드) 통합 실행
  ┣ .env.example                # 포트/비밀번호 오버라이드 예시
  ┣ backend/                    # 백엔드 서버 (Spring Boot)

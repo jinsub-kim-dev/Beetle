@@ -27,7 +27,7 @@ docker compose version   # v2 이상
 
 - Docker Desktop / Rancher Desktop / Colima / Docker Engine 모두 가능하다.
 - 컨테이너 없이 **백엔드만** IDE 에서 띄우려면 JDK 17, **프론트엔드 개발 서버**(HMR)를
-  쓰려면 Node 22 가 추가로 필요하다. (2.4절)
+  쓰려면 Node 22 가 추가로 필요하다. (2.5절)
 
 ---
 
@@ -52,12 +52,42 @@ docker compose up -d --build
 
 - 프론트엔드 컨테이너의 nginx 가 `/api` 를 백엔드로 프록시한다. 브라우저는 하나의 오리진만
   보게 되므로 CORS 설정이 필요 없다.
-- 첫 기동 시 Flyway 가 스키마와 **시드 데이터**(기본 카테고리 13종, 결제 수단 `현금`)를
-  적용하므로, 손으로 데이터를 만들지 않아도 화면이 채워진다.
+- 첫 기동 시 데이터베이스·계정·스키마·시드 데이터가 모두 자동으로 준비된다. 손으로 만들
+  것은 없다. 자세한 순서는 2.2절에 있다.
 - MySQL 만 표준 포트(3306)를 피한다. 호스트에 이미 MySQL 이 있는 환경에서 충돌하기 때문이며,
   컨테이너 안쪽 포트는 3306 그대로다.
 
-### 2.2 종료와 초기화
+### 2.2 MySQL 최초 구성
+
+**직접 할 일은 없다.** `CREATE DATABASE` 나 `CREATE USER` 를 실행하지 않아도 된다.
+첫 기동 때 아래가 순서대로 자동으로 일어난다.
+
+| 단계 | 주체 | 내용 |
+|---|---|---|
+| 1 | MySQL 컨테이너 | `DB_NAME` 데이터베이스와 `DB_USER` 계정을 만들고, 그 DB 에만 권한을 준다 |
+| 2 | 같음 | 문자셋 `utf8mb4` / 정렬 `utf8mb4_unicode_ci` / 타임존 `+09:00` 적용 |
+| 3 | 백엔드 (Flyway) | `db/migration` 의 스키마를 적용한다 |
+| 4 | 백엔드 (Flyway) | 로컬에서만 `db/seed` 의 시드 데이터(기본 카테고리 13종, 결제 수단 `현금`)를 넣는다 |
+
+값은 `.env` 의 `DB_NAME` / `DB_USER` / `DB_PASSWORD` 에서 온다. 기본값은 모두 `beetle`
+(비밀번호는 `beetlepassword`)이다. 애플리케이션 계정은 **그 DB 안에서만** 권한을 갖고
+서버 전체 권한은 없다. `root` 비밀번호는 `MYSQL_ROOT_PASSWORD` 로 따로 둔다.
+
+> **첫 기동 이후에는 계정 정보를 바꿀 수 없다.** MySQL 은 데이터 볼륨이 **비어 있을 때만**
+> 초기화를 실행한다. 이미 데이터가 있으면 `MYSQL_USER` / `MYSQL_PASSWORD` 를 바꿔도 무시하고
+> 기존 계정을 그대로 쓰므로, `.env` 만 고치면 백엔드가 `Access denied` 로 기동에 실패한다.
+> 계정을 바꾸려면 둘 중 하나를 택한다.
+>
+> - 데이터를 버려도 되면: `docker compose down -v` 로 볼륨을 지우고 다시 기동한다
+> - 데이터를 지켜야 하면: 3.7절로 백업한 뒤 볼륨을 지우고 새 계정으로 기동해 복구하거나,
+>   기존 계정으로 접속해 `ALTER USER` 로 직접 바꾼다
+
+**스키마 변경은 Flyway 로만 한다.** 테이블을 손으로 만들거나 고치지 않는다. Hibernate 가
+`ddl-auto=validate` 로 매핑과 실제 스키마를 대조하므로, 손으로 바꾼 스키마는 다음 기동에서
+검증 실패로 드러난다. 새 마이그레이션은 `backend/src/main/resources/db/migration` 에
+`V<번호>__<설명>.sql` 로 추가한다.
+
+### 2.3 종료와 초기화
 
 ```bash
 docker compose down      # 종료 (데이터 유지)
@@ -65,8 +95,9 @@ docker compose down -v   # 데이터까지 삭제
 ```
 
 데이터는 Docker Volume(`beetle-mysql-data`)에 보존되므로 컨테이너를 재생성해도 남는다.
+`down -v` 는 볼륨을 지우므로 2.2 의 최초 구성이 처음부터 다시 일어난다.
 
-### 2.3 포트가 이미 사용 중일 때
+### 2.4 포트가 이미 사용 중일 때
 
 ```bash
 cp .env.example .env
@@ -86,7 +117,7 @@ docker compose up -d
 (`application-dev.yml` 의 기본값이 compose 노출 포트와 같아야 하며, 두 값이 어긋나면
 `ProfileConfigurationTest` 가 실패한다)
 
-### 2.4 일부만 컨테이너로 띄우기
+### 2.5 일부만 컨테이너로 띄우기
 
 **백엔드를 IDE 나 Gradle 로 띄울 때** — DB 만 컨테이너로 올린다.
 
@@ -109,7 +140,7 @@ Vite 가 `/api` 를 `http://localhost:8080` 으로 프록시한다. 백엔드 �
 `frontend/.env.development.local` 에 `VITE_API_PROXY_TARGET` 을 지정한다.
 (`.env.development` 는 팀 공용 기본값이므로 개인 설정은 `*.local` 에 둔다)
 
-### 2.5 검증
+### 2.6 검증
 
 ```bash
 cd backend  && ./gradlew check   # 테스트 + 도메인 커버리지 + 규칙 강제
@@ -183,6 +214,10 @@ chmod 600 .env   # 비밀번호가 담기므로 권한을 좁힌다
 
 > `.env` 는 커밋되지 않는다(`.gitignore`). 비밀번호를 저장소에 넣지 않는다.
 
+> **비밀번호는 첫 기동 때 확정된다.** MySQL 은 데이터 볼륨이 비어 있을 때만 계정을
+> 만든다(2.2절). 배포한 뒤에 `.env` 의 비밀번호를 고쳐도 DB 에는 반영되지 않고 백엔드만
+> `Access denied` 로 죽는다. **처음부터 실제로 쓸 값을 넣는다.**
+
 **명령을 짧게 쓰려면** `.env` 에 아래 한 줄을 넣는다. 그 호스트에서는 `docker compose up -d`
 만으로 배포 구성이 적용된다.
 
@@ -200,11 +235,17 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 - 외부에 열리는 것은 **프론트엔드 하나뿐**이다. 백엔드와 MySQL 포트는 호스트에 노출하지
   않으며, 브라우저가 보는 오리진은 프론트엔드 하나다(nginx 가 `/api` 를 프록시).
+- 데이터베이스·계정·스키마는 2.2절과 같은 순서로 자동 구성된다. 직접 만들 것은 없다.
 - 백엔드가 뜰 때 Flyway 가 스키마 마이그레이션을 적용한다. **시드 데이터는 적용하지
   않으므로 빈 상태로 시작한다.** 카테고리와 결제 수단을 설정 화면에서 직접 등록한다.
 - 비어 있지 않은 DB 에 처음 배포하면 **의도적으로 실패한다**(`baseline-on-migrate` 금지).
   기존 스키마를 자동으로 기준선 처리하면 마이그레이션 이력이 어긋나므로, 그때는 사람이
   판단해야 한다.
+- **관리형 DB(RDS 등)를 쓰려면 compose 를 고쳐야 한다.** 현재 구성은 함께 띄우는 MySQL
+  컨테이너를 전제로 `DB_HOST: mysql` 을 고정하고 백엔드가 그 컨테이너의 헬스체크를 기다린다.
+  외부 DB 로 바꾸려면 `DB_HOST`/`DB_PORT` 를 덮어쓰고 `mysql` 서비스와 그 `depends_on` 을
+  걷어낸다. 그쪽에는 **빈 스키마와 그 스키마 권한을 가진 계정만** 준비하면 되고, 테이블
+  생성은 Flyway 가 한다.
 
 ### 3.5 배포 확인
 
