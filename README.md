@@ -2,6 +2,7 @@
 
 개인 맞춤형 가계부 시스템. 이 문서는 **실행과 배포 방법**만 다룬다.
 
+- **환경 구축 절차: [SETUP.md](SETUP.md)** — 처음부터 만들 때, 라즈베리파이에 배포할 때
 - 도메인 요구사항: [BEETLE_PRD.md](BEETLE_PRD.md)
 - 개발 원칙: [CLAUDE.md](CLAUDE.md) · [backend/CLAUDE.md](backend/CLAUDE.md) · [frontend/CLAUDE.md](frontend/CLAUDE.md)
 
@@ -59,33 +60,16 @@ docker compose up -d --build
 
 ### 2.2 MySQL 최초 구성
 
-**직접 할 일은 없다.** `CREATE DATABASE` 나 `CREATE USER` 를 실행하지 않아도 된다.
-첫 기동 때 아래가 순서대로 자동으로 일어난다.
+**직접 할 일은 없다.** `CREATE DATABASE` 나 `CREATE USER` 를 실행하지 않아도 된다. 첫 기동
+때 MySQL 컨테이너가 DB·계정·권한과 문자셋·타임존을 만들고, 백엔드의 Flyway 가 스키마와
+(로컬에서만) 시드 데이터를 넣는다.
 
-| 단계 | 주체 | 내용 |
-|---|---|---|
-| 1 | MySQL 컨테이너 | `DB_NAME` 데이터베이스와 `DB_USER` 계정을 만들고, 그 DB 에만 권한을 준다 |
-| 2 | 같음 | 문자셋 `utf8mb4` / 정렬 `utf8mb4_unicode_ci` / 타임존 `+09:00` 적용 |
-| 3 | 백엔드 (Flyway) | `db/migration` 의 스키마를 적용한다 |
-| 4 | 백엔드 (Flyway) | 로컬에서만 `db/seed` 의 시드 데이터(기본 카테고리 13종, 결제 수단 `현금`)를 넣는다 |
+> **첫 기동 이후에는 계정 정보를 바꿀 수 없다.** MySQL 은 데이터 볼륨이 비어 있을 때만
+> 초기화를 실행하므로, `.env` 의 `DB_USER`/`DB_PASSWORD` 만 고치면 백엔드가 `Access denied`
+> 로 죽는다. 계정을 바꿀 거라면 **첫 기동 전에** 정한다.
 
-값은 `.env` 의 `DB_NAME` / `DB_USER` / `DB_PASSWORD` 에서 온다. 기본값은 모두 `beetle`
-(비밀번호는 `beetlepassword`)이다. 애플리케이션 계정은 **그 DB 안에서만** 권한을 갖고
-서버 전체 권한은 없다. `root` 비밀번호는 `MYSQL_ROOT_PASSWORD` 로 따로 둔다.
-
-> **첫 기동 이후에는 계정 정보를 바꿀 수 없다.** MySQL 은 데이터 볼륨이 **비어 있을 때만**
-> 초기화를 실행한다. 이미 데이터가 있으면 `MYSQL_USER` / `MYSQL_PASSWORD` 를 바꿔도 무시하고
-> 기존 계정을 그대로 쓰므로, `.env` 만 고치면 백엔드가 `Access denied` 로 기동에 실패한다.
-> 계정을 바꾸려면 둘 중 하나를 택한다.
->
-> - 데이터를 버려도 되면: `docker compose down -v` 로 볼륨을 지우고 다시 기동한다
-> - 데이터를 지켜야 하면: 3.7절로 백업한 뒤 볼륨을 지우고 새 계정으로 기동해 복구하거나,
->   기존 계정으로 접속해 `ALTER USER` 로 직접 바꾼다
-
-**스키마 변경은 Flyway 로만 한다.** 테이블을 손으로 만들거나 고치지 않는다. Hibernate 가
-`ddl-auto=validate` 로 매핑과 실제 스키마를 대조하므로, 손으로 바꾼 스키마는 다음 기동에서
-검증 실패로 드러난다. 새 마이그레이션은 `backend/src/main/resources/db/migration` 에
-`V<번호>__<설명>.sql` 로 추가한다.
+단계별 절차와 확인 명령, 계정을 이미 만든 뒤에 바꾸는 방법은
+[SETUP.md 1.5절](SETUP.md#15-mysql-최초-구성--자동이다)에 있다.
 
 ### 2.3 종료와 초기화
 
@@ -183,6 +167,9 @@ docker compose version
 
 메모리는 **2GB 이상**을 권한다. 백엔드 이미지 빌드 시 Gradle 이 의존성을 내려받고
 컴파일하므로 첫 빌드는 몇 분 걸린다.
+
+> **라즈베리파이에 배포한다면** 아키텍처 제약(64-bit OS 필수)과 빌드 전략, 자동 시작
+> 설정까지 [SETUP.md 2절](SETUP.md#2-라즈베리파이-배포)에 정리해 두었다.
 
 ### 3.3 소스와 `.env` 준비
 
