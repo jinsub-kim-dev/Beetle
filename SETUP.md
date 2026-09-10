@@ -35,8 +35,8 @@ git clone -b dev https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
 ```
 
-`dev` 브랜치를 지정한다. `main` 에는 저장소 초기 커밋만 있어 브랜치를 빼면 빈 프로젝트를
-받는다.
+개발은 `dev` 에서 이뤄지므로 로컬 환경은 `dev` 를 받는다. `main` 은 검증이 끝난 상태만
+머지하는 배포 기준 브랜치다(2절).
 
 ### 1.3 `.env` — 지금은 만들지 않아도 된다
 
@@ -237,9 +237,11 @@ docker compose version
 ### 2.4-a 파이에서 직접 빌드
 
 ```bash
-git clone -b dev https://github.com/jinsub-kim-dev/Beetle.git
+git clone https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
 ```
+
+배포는 `main` 을 쓴다. 아직 머지되지 않은 변경을 올려야 하면 `-b dev` 로 받는다.
 
 메모리가 2GB 이하라면 **스왑을 먼저 늘린다.** Gradle 이 컴파일 중 OOM 으로 죽는 것을 막는다.
 아래는 Raspberry Pi OS 기준이다. 다른 배포판이면 그쪽의 스왑 설정 방법을 따른다.
@@ -274,7 +276,7 @@ docker save beetle-backend:arm64 beetle-frontend:arm64 \
 
 ```bash
 ssh pi@raspberrypi.local
-git clone -b dev https://github.com/jinsub-kim-dev/Beetle.git
+git clone https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
 cat > docker-compose.image.yml <<'EOF'
 # 미리 만들어 온 이미지를 그대로 쓴다. 파이에서 빌드하지 않는다.
@@ -398,5 +400,5 @@ hostname -I        # 예: 192.168.0.12
 파이에서는 특히 아래 두 가지를 권한다.
 
 - **백업을 cron 에 걸고 덤프를 파이 밖으로 옮긴다.** SD 카드 고장은 예고 없이 온다
-- 갱신은 `git pull origin dev` 후 다시 기동한다. 2.4-b 로 배포했다면 이미지를 다시 만들어
+- 갱신은 `git pull origin main` 후 다시 기동한다. 2.4-b 로 배포했다면 이미지를 다시 만들어
   옮긴다

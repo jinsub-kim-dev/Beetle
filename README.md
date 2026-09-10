@@ -174,13 +174,13 @@ docker compose version
 ### 3.3 소스와 `.env` 준비
 
 ```bash
-git clone -b dev https://github.com/jinsub-kim-dev/Beetle.git
+git clone https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
 cp .env.example .env
 ```
 
-> **브랜치를 지정한다.** 현재 개발은 `dev` 브랜치에서 이뤄지고 있고 `main` 에는 저장소
-> 초기 커밋만 있다. 브랜치를 빼고 clone 하면 빈 프로젝트를 받는다.
+> **배포는 `main` 을 쓴다.** 개발은 `dev` 에서 이뤄지고, 검증이 끝나면 `main` 으로 머지한다.
+> 아직 `main` 에 올라가지 않은 변경을 배포해야 하면 `git clone -b dev ...` 로 받는다.
 
 `.env` 에서 **아래 네 값은 필수**다. 배포 프로필은 접속 정보에 기본값을 두지 않으므로,
 값이 없으면 컨테이너가 기동에 실패한다. 기본 비밀번호로 배포되는 것보다 뜨지 않는 편이 낫다.
@@ -260,7 +260,7 @@ curl -o /dev/null -w '%{http_code}\n' http://localhost/actuator/env      # 404
 ### 3.6 갱신 (재배포)
 
 ```bash
-git pull origin dev
+git pull origin main
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
 
