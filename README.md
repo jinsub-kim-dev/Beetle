@@ -142,6 +142,8 @@ cd frontend && npm run check     # 타입 검사 + 린트 + 테스트
 배포는 **라즈베리파이 2대**(앱 서버 + DB 서버)에 나눠 올리는 구성이다. 빌드는 개발 머신에서
 하고 파이는 받은 이미지를 실행한다.
 
+![Beetle 배포 구성](docs/architecture.svg)
+
 ```bash
 # 개발 머신에서 — 빌드·전송·재기동을 한 번에
 APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh

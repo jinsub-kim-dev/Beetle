@@ -405,6 +405,8 @@ Beetle/                        # 루트 디렉토리
  ┣ README.md                   # 실행 명령 요약과 운영 안내
  ┣ SETUP.md                    # 환경 구축 절차 (로컬, 라즈베리파이 배포)
  ┣ FEATURES.md                 # 제공 기능 안내 (화면 기준)
+ ┣ docs/architecture.svg       # 배포 구성도 (라이트·다크 모두 대응)
+ ┣ scripts/deploy.sh           # 데스크탑 -> 앱 서버 배포
  ┣ docker-compose.yml          # 로컬 인프라 (MySQL + 백엔드 + 프론트엔드) 통합 실행
  ┣ .env.example                # 포트/비밀번호 오버라이드 예시
  ┣ backend/                    # 백엔드 서버 (Spring Boot)

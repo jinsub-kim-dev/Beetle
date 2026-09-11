@@ -1,0 +1,84 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" width="900" height="340"
+     role="img" aria-label="Beetle 배포 구성: 데스크탑 PC 에서 빌드해 앱 서버 파이로 전송하고, 앱 서버 파이가 DB 서버 파이의 MySQL 에 접속한다">
+  <title>Beetle 배포 구성</title>
+  <desc>데스크탑 PC(코드 수정·빌드·배포 실행), 앱 서버 라즈베리파이(백엔드 + nginx, 80 공개), DB 서버 라즈베리파이(MySQL, 3306 은 앱 서버만 허용)가 같은 공유기 네트워크에 있다.</desc>
+
+  <style>
+    /* 기본은 라이트. 배경을 직접 칠하므로 다크 모드 감지가 되지 않는 환경에서도 읽힌다. */
+    .bg     { fill: #ffffff; }
+    .net    { fill: none; stroke: #b8c0cc; stroke-width: 1.5; stroke-dasharray: 6 5; }
+    .netlbl { fill: #6b7684; }
+    .card   { fill: #f7f9fc; stroke: #c8d1de; stroke-width: 1.5; }
+    .accent { fill: #eef2ff; stroke: #a5b4fc; }
+    .db     { fill: #fff7ed; stroke: #fdba74; }
+    .name   { fill: #1f2328; font-weight: 700; }
+    .role   { fill: #4b5563; }
+    .muted  { fill: #6b7684; }
+    .arrow  { stroke: #6b7684; stroke-width: 2; fill: none; }
+    .arrlbl { fill: #4b5563; font-weight: 600; }
+    text    { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+
+    @media (prefers-color-scheme: dark) {
+      .bg     { fill: #0d1117; }
+      .net    { stroke: #3d444d; }
+      .netlbl { fill: #9198a1; }
+      .card   { fill: #161b22; stroke: #3d444d; }
+      .accent { fill: #17203a; stroke: #4c5da8; }
+      .db     { fill: #2a1e11; stroke: #9a6534; }
+      .name   { fill: #e6edf3; }
+      .role   { fill: #c9d1d9; }
+      .muted  { fill: #9198a1; }
+      .arrow  { stroke: #9198a1; }
+      .arrlbl { fill: #c9d1d9; }
+    }
+  </style>
+
+  <defs>
+    <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="context-stroke"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="900" height="340"/>
+
+  <!-- 같은 네트워크 -->
+  <rect class="net" x="20" y="58" width="860" height="242" rx="14"/>
+  <text class="netlbl" x="40" y="84" font-size="13">집 공유기 · 스위칭 허브 — 세 장비 모두 같은 네트워크, 고정 IP 예약</text>
+
+  <!-- 데스크탑 PC -->
+  <rect class="card" x="45" y="112" width="230" height="150" rx="10"/>
+  <text class="name" x="65" y="142" font-size="15">데스크탑 PC</text>
+  <text class="role" x="65" y="170" font-size="13">코드 수정 · 테스트</text>
+  <text class="role" x="65" y="192" font-size="13" font-weight="700">빌드 (JAR · dist · 이미지)</text>
+  <text class="role" x="65" y="214" font-size="13">배포 실행</text>
+  <text class="muted" x="65" y="240" font-size="12">상시 운영은 하지 않는다</text>
+
+  <!-- 앱 서버 파이 -->
+  <rect class="card accent" x="335" y="112" width="230" height="150" rx="10"/>
+  <text class="name" x="355" y="142" font-size="15">앱 서버 파이</text>
+  <text class="role" x="355" y="170" font-size="13">백엔드 + nginx</text>
+  <text class="role" x="355" y="192" font-size="13" font-weight="700">:80 만 공개</text>
+  <text class="role" x="355" y="214" font-size="13">nginx 가 /api 프록시</text>
+  <text class="muted" x="355" y="240" font-size="12">빌드하지 않는다 (이미지 실행)</text>
+
+  <!-- DB 서버 파이 -->
+  <rect class="card db" x="625" y="112" width="230" height="150" rx="10"/>
+  <text class="name" x="645" y="142" font-size="15">DB 서버 파이</text>
+  <text class="role" x="645" y="170" font-size="13">MySQL 8.4</text>
+  <text class="role" x="645" y="192" font-size="13" font-weight="700">3306 — 앱 서버만 허용</text>
+  <text class="role" x="645" y="214" font-size="13">데이터 보관 · 백업</text>
+  <text class="muted" x="645" y="240" font-size="12">USB SSD 권장</text>
+
+  <!-- 화살표: 데스크탑 -> 앱 서버 -->
+  <path class="arrow" d="M 278 187 L 330 187" marker-end="url(#head)"/>
+  <text class="arrlbl" x="304" y="172" font-size="12" text-anchor="middle">SSH</text>
+  <text class="muted"  x="304" y="208" font-size="11" text-anchor="middle">이미지 전송</text>
+
+  <!-- 화살표: 앱 서버 -> DB 서버 -->
+  <path class="arrow" d="M 568 187 L 620 187" marker-end="url(#head)"/>
+  <text class="arrlbl" x="594" y="172" font-size="12" text-anchor="middle">JDBC</text>
+  <text class="muted"  x="594" y="208" font-size="11" text-anchor="middle">3306</text>
+
+  <!-- 외부 접속 -->
+  <text class="muted" x="450" y="292" font-size="12" text-anchor="middle">같은 네트워크의 기기에서 브라우저로 앱 서버의 :80 에 접속한다</text>
+</svg>
