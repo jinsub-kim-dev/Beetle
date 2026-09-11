@@ -11,9 +11,11 @@
 # 접속 정보에는 기본값을 두지 않는다. 값이 없으면 기동에 실패하며, 이 편이 안전하다.
 # 기본 비밀번호로 배포되는 것보다 뜨지 않는 것이 낫다.
 services:
+  # MySQL 자체의 필수 값(루트 비밀번호)은 DB 가 실제로 뜨는 곳에서 요구한다.
+  # 여기서 요구하면 DB 를 띄우지 않는 앱 서버에도 루트 비밀번호를 두게 된다.
+  # 한 호스트에 전부 올리는 구성이라면 .env 에 MYSQL_ROOT_PASSWORD 를 직접 채운다.
   mysql:
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 를 설정해야 합니다}
       MYSQL_DATABASE: ${DB_NAME:?DB_NAME 을 설정해야 합니다}
       MYSQL_USER: ${DB_USER:?DB_USER 를 설정해야 합니다}
       MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 설정해야 합니다}

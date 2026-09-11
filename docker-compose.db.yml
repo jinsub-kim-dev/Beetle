@@ -13,6 +13,9 @@ services:
     profiles: ["unused"]
 
   mysql:
+    environment:
+      # 루트 비밀번호는 DB 가 뜨는 이 호스트에서만 필요하다. 기본값을 두지 않는다.
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD 를 설정해야 합니다}
     # 앱 서버가 접속할 포트. 특정 인터페이스에만 열려면 DB_BIND 를 그 주소로 지정한다.
     ports:
       - "${DB_BIND:-0.0.0.0}:${DB_PORT:-3306}:3306"
