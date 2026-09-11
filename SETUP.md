@@ -794,8 +794,18 @@ docker compose -f docker-compose.yml -f docker-compose.override.yml \
 
 ## 5.7 자원 사용량
 
-모니터링 컨테이너 4개를 합쳐 대략 200~300MB 를 쓴다. 앱 서버 파이의 메모리가 4GB 라면
-백엔드(약 420MB)와 함께 올려도 여유가 있다. 프로메테우스의 데이터는 도커 볼륨
+로컬에서 기동 직후 측정한 값이다.
+
+| 컨테이너 | 메모리 |
+|---|---|
+| `grafana` | 약 82MB |
+| `prometheus` | 약 29MB |
+| `node-exporter` | 약 23MB |
+| `blackbox` | 약 13MB |
+| **모니터링 합계** | **약 150MB** |
+
+지표가 쌓이면 프로메테우스가 조금 더 쓴다. 앱 서버 파이의 메모리가 4GB 라면
+백엔드(약 450MB)와 함께 올려도 여유가 있다. 프로메테우스의 데이터는 도커 볼륨
 (`beetle-prometheus-data`)에 쌓이고 2GB 를 넘지 않는다.
 
 ```bash
