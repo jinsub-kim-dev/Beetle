@@ -187,21 +187,32 @@ docker compose down -v   # 볼륨까지 삭제 — 1.5절의 최초 구성이 �
 
 ---
 
-## 2. 라즈베리파이 배포
+## 2. 라즈베리파이 배포 — 서버 1대 + DB 1대
+
+집 안 네트워크에 파이 두 대를 두는 구성이다.
+
+```
+데스크탑 PC ──┐
+              │  (같은 공유기)
+  앱 서버 파이 ├── 80 공개 · 백엔드 + 프론트엔드(nginx)
+   DB 서버 파이┘── 3306 (앱 서버만) · MySQL
+```
+
+빌드는 **데스크탑에서만** 한다. 파이는 만들어진 이미지를 받아 띄우기만 한다.
 
 ### 2.1 하드웨어와 OS
 
 | 항목 | 요구 | 이유 |
 |---|---|---|
-| OS 아키텍처 | **64-bit(arm64) 필수** | `mysql:8.4` 공식 이미지는 `linux/amd64` 와 `linux/arm64/v8` 만 제공한다. 32-bit(armv7) OS 에서는 MySQL 컨테이너가 아예 뜨지 않는다 |
-| 모델 | Pi 4 또는 5 권장 | |
-| RAM | 4GB 권장, 2GB 는 조건부 | MySQL 8 은 유휴 상태에서도 수백 MB 를 쓴다. 파이에서 직접 빌드하려면 여유가 더 필요하다(2.4-a) |
-| 저장장치 | USB SSD 권장 | SD 카드는 DB 쓰기가 반복되면 수명이 빨리 준다 |
+| OS 아키텍처 | **64-bit(arm64) 필수** | `mysql:8.4` 공식 이미지는 `linux/amd64` 와 `linux/arm64/v8` 만 제공한다. 32-bit(armv7) OS 에서는 DB 서버가 아예 뜨지 않는다 |
+| 모델 | Pi 4 또는 5 | |
+| RAM | 2GB 가능, 4GB 권장 | 실측 사용량은 앱 서버 약 420MB(백엔드 416MB + nginx 3MB), DB 서버 약 490MB 다 |
+| DB 서버 저장장치 | **USB SSD 권장** | MySQL + SD 카드는 쓰기 증폭으로 수명이 빨리 줄고 랜덤 쓰기가 느리다. 이 구성에서 가장 중요한 하드웨어 선택이다 |
 
 ```bash
 uname -m          # aarch64 여야 한다. armv7l 이면 64-bit OS 로 다시 설치한다
-free -h           # 사용 가능 메모리
-df -h /           # 여유 공간 (이미지 두 개에 약 500MB + DB)
+free -h
+df -h /
 ```
 
 이미지들의 아키텍처 지원은 아래와 같다(직접 확인한 값이다).
@@ -209,102 +220,91 @@ df -h /           # 여유 공간 (이미지 두 개에 약 500MB + DB)
 | 이미지 | 지원 플랫폼 |
 |---|---|
 | `mysql:8.4` | `linux/amd64`, `linux/arm64/v8` |
-| `eclipse-temurin:17-jdk` / `17-jre` | amd64, **arm/v7**, arm64/v8, ppc64le, s390x |
-| `node:22-alpine` | amd64, arm/v6, **arm/v7**, arm64/v8, s390x |
-| `nginx:alpine` | 386, amd64, arm/v6, **arm/v7**, arm64/v8, ppc64le, riscv64, s390x |
+| `eclipse-temurin:17-jre` | amd64, arm/v7, arm64/v8, ppc64le, s390x |
+| `nginx:alpine` | 386, amd64, arm/v6, arm/v7, arm64/v8, ppc64le, riscv64, s390x |
 
-MySQL 을 빼면 armv7 도 되지만, MySQL 때문에 결론은 **arm64 필수**다.
+### 2.2 두 대에 공통으로 할 설정
 
-### 2.2 Docker 설치
+**① 고정 IP** — 파이에서 static 설정을 하지 말고 **공유기에서 DHCP 예약**을 권한다.
+설정이 한 곳에 모이고, 파이를 재설치해도 유지된다. 앱 서버는 DB 서버의 주소를 알아야
+하므로 **DB 서버의 IP 고정은 필수**다.
+
+**② 호스트명 구분** — 두 대를 오갈 때 헷갈리지 않게 한다.
+
+```bash
+sudo hostnamectl set-hostname beetle-app     # 또는 beetle-db
+```
+
+**③ 시간대와 시간 동기** — 두 파이의 시계가 어긋나면 **소비일·청구일이 하루 틀어진다.**
+이 가계부에서는 특히 중요하다.
+
+```bash
+sudo timedatectl set-timezone Asia/Seoul
+timedatectl status        # NTP service: active 확인
+```
+
+**④ SSH 하드닝** — 데스크탑에서 키를 보내고 비밀번호 로그인을 막는다.
+
+```bash
+# 데스크탑에서
+ssh-copy-id pi@192.168.0.10
+```
+
+```bash
+# 파이에서
+sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+sudo systemctl restart ssh
+```
+
+기본 `pi` 계정 대신 개인 계정을 쓰는 것이 낫다. 포트 변경은 LAN 전용이면 필요하지 않다.
+
+**⑤ Docker 설치와 자동 시작**
 
 ```bash
 curl -fsSL https://get.docker.com | sh     # Docker 공식 설치 스크립트
 sudo usermod -aG docker "$USER"            # 재로그인 후 적용
-sudo systemctl enable --now docker         # 부팅 시 자동 시작
+sudo systemctl enable --now docker
 docker compose version
+docker info | grep -i "no memory limit" && echo "cgroup 메모리 설정이 필요하다"
 ```
 
-### 2.3 배포 방식 두 가지
+> 위 마지막 줄이 걸리면 `/boot/firmware/cmdline.txt`(구버전은 `/boot/cmdline.txt`) 맨 뒤에
+> `cgroup_enable=memory cgroup_memory=1` 을 한 줄에 이어 붙이고 재부팅한다.
 
-파이는 CPU 와 메모리가 넉넉하지 않으므로, 이미지를 **어디서 만들지** 먼저 정한다.
+**⑥ 방화벽** — LAN 안이라도 필요한 포트만 연다.
 
-| | (a) 파이에서 직접 빌드 | (b) 개발 머신에서 빌드해 옮기기 |
-|---|---|---|
-| 준비 | 없음 | Docker buildx, SSH 접속 |
-| 파이 부담 | 크다 (Gradle·Vite 빌드) | 없다 (이미지 적재만) |
-| 소요 | 십수 분~수십 분 | 개발 머신 빌드 + 약 200MB 전송 |
-| 추천 | 2GB 이상 + 시간 여유 | **개발 머신이 Apple Silicon Mac 이면 특히 유리** — arm64 가 네이티브라 빠르다 |
+```bash
+sudo apt install -y ufw
+sudo ufw allow 22/tcp
+# 앱 서버에서
+sudo ufw allow 80/tcp
+# DB 서버에서 — 앱 서버 IP 만 허용한다
+sudo ufw allow from 192.168.0.10 to any port 3306 proto tcp
+sudo ufw enable
+```
 
-### 2.4-a 파이에서 직접 빌드
+**⑦ 보안 업데이트**
+
+```bash
+sudo apt install -y unattended-upgrades
+sudo dpkg-reconfigure -plow unattended-upgrades
+```
+
+DB 서버는 자동 재부팅을 켜지 않는 편이 안전하다. 재부팅 시점을 사람이 정한다.
+
+> **로그 용량은 저장소에서 이미 제한해 두었다.** compose 의 모든 서비스가 `json-file`
+> 드라이버에 `max-size=10m, max-file=3` 으로 묶여 있다. 설정하지 않으면 무제한이어서
+> SD 카드가 조용히 가득 차는 사고가 난다.
+
+### 2.3 DB 서버 파이
+
+**① 저장소와 `.env`**
 
 ```bash
 git clone https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
-```
-
-배포는 `main` 을 쓴다. 아직 머지되지 않은 변경을 올려야 하면 `-b dev` 로 받는다.
-
-메모리가 2GB 이하라면 **스왑을 먼저 늘린다.** Gradle 이 컴파일 중 OOM 으로 죽는 것을 막는다.
-아래는 Raspberry Pi OS 기준이다. 다른 배포판이면 그쪽의 스왑 설정 방법을 따른다.
-
-```bash
-sudo dphys-swapfile swapoff
-sudo sed -i 's/^CONF_SWAPSIZE=.*/CONF_SWAPSIZE=2048/' /etc/dphys-swapfile
-sudo dphys-swapfile setup && sudo dphys-swapfile swapon
-free -h
-```
-
-이어서 2.5절의 `.env` 를 만들고 2.6절로 기동한다.
-
-### 2.4-b 개발 머신에서 빌드해 옮기기
-
-개발 머신에서 **arm64 이미지**를 만든다. buildx 는 Docker Desktop 에 기본 포함되어 있다.
-
-```bash
-docker buildx build --platform linux/arm64 -t beetle-backend:arm64  --load ./backend
-docker buildx build --platform linux/arm64 -t beetle-frontend:arm64 --load ./frontend
-```
-
-압축해 SSH 로 보낸다. 실제 크기는 백엔드 **약 167MB**, 프론트엔드 **약 27MB** 다(gzip).
-
-```bash
-docker save beetle-backend:arm64 beetle-frontend:arm64 \
-  | gzip -1 \
-  | ssh pi@raspberrypi.local 'gunzip | docker load'
-```
-
-파이에서 저장소를 받고(compose 파일이 필요하다) 이미지를 쓰도록 override 를 하나 만든다.
-
-```bash
-ssh pi@raspberrypi.local
-git clone https://github.com/jinsub-kim-dev/Beetle.git
-cd Beetle
-cat > docker-compose.image.yml <<'EOF'
-# 미리 만들어 온 이미지를 그대로 쓴다. 파이에서 빌드하지 않는다.
-services:
-  backend:
-    image: beetle-backend:arm64
-  frontend:
-    image: beetle-frontend:arm64
-EOF
-```
-
-기동할 때 이 파일을 함께 지정하고 **`--build` 를 붙이지 않는다.**
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.image.yml up -d
-```
-
-> 프론트엔드 이미지는 빌드 시점에 `.env.production` 이 구워진다. API 주소를 바꿔야 하면
-> 이미지를 다시 만들어야 한다. 기본값(같은 오리진의 `/api`)이면 그대로 쓰면 된다.
-
-### 2.5 `.env` 작성 — 배포는 필수다
-
-배포 프로필은 접속 정보에 기본값을 두지 않는다. 값이 없으면 **컨테이너가 기동에 실패한다.**
-기본 비밀번호로 배포되는 것보다 뜨지 않는 편이 안전하다.
-
-```bash
 cp .env.example .env
+chmod 600 .env
 ```
 
 ```bash
@@ -313,63 +313,134 @@ DB_NAME=beetle
 DB_USER=beetle
 DB_PASSWORD=<직접 생성한 값>
 
-# 외부에 노출할 포트. 파이에서는 80 이 편하다
-FRONTEND_PORT=80
-```
-
-```bash
-chmod 600 .env
+DB_PORT=3306          # 앱 서버가 접속할 포트
+# DB_BIND=0.0.0.0     # 특정 인터페이스에만 열려면 그 주소
 ```
 
 > **비밀번호는 첫 기동 때 확정된다.** 나중에 `.env` 만 고쳐도 DB 에는 반영되지 않는다
-> (1.5절과 같은 이유). **처음부터 실제로 쓸 값을 넣는다.**
+> (1.5절). 처음부터 실제로 쓸 값을 넣는다. 이 값은 앱 서버의 `.env` 에도 같게 넣어야 한다.
 
-### 2.6 기동
+**② 기동** — MySQL 만 뜬다.
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.db.yml up -d
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.db.yml ps
 ```
 
-2.4-b 로 이미지를 가져왔다면 `-f docker-compose.image.yml` 을 추가하고 `--build` 를 뺀다.
+`mysql:8.4` 이미지는 파이가 Docker Hub 에서 직접 받는다(arm64 지원). 전송할 것이 없다.
 
-명령이 길어 불편하면 `.env` 에 한 줄을 넣는다. 그 뒤로는 `docker compose up -d` 만으로
-배포 구성이 적용된다. **배포 전용 호스트에서만** 쓴다.
+**③ 확인**
 
 ```bash
-COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+# DB 서버에서
+docker exec -e MYSQL_PWD="$DB_PASSWORD" beetle-mysql mysql -u"$DB_USER" -e "SHOW DATABASES;"
 ```
 
-**첫 기동 때 일어나는 일**은 1.5절과 같고 **시드 데이터만 빠진다.** 빈 상태로 시작하므로
-카테고리와 결제 수단을 설정 화면에서 직접 등록한다.
+```bash
+# 앱 서버에서 — 접속이 되는지
+nc -vz 192.168.0.20 3306
+```
 
-**자동 시작**은 이미 준비되어 있다. 배포 구성의 세 서비스 모두 `restart: unless-stopped`
-이므로, Docker 서비스가 부팅 시 켜져 있으면(2.2절의 `systemctl enable`) 파이를 재부팅해도
-알아서 올라온다.
+스키마는 아직 비어 있다. **앱 서버의 백엔드가 처음 뜰 때 Flyway 가 만든다.**
+시드 데이터는 배포 프로필에서 적용되지 않으므로 빈 가계부로 시작한다.
 
-### 2.7 확인과 접속
+### 2.4 앱 서버 파이
+
+**① 저장소와 `.env`**
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml ps
+git clone https://github.com/jinsub-kim-dev/Beetle.git
+cd Beetle
+cp .env.example .env
+chmod 600 .env
+```
+
+```bash
+# DB 서버와 같은 값이어야 한다
+DB_NAME=beetle
+DB_USER=beetle
+DB_PASSWORD=<DB 서버와 동일>
+MYSQL_ROOT_PASSWORD=<아무 값. 이 호스트에서는 쓰이지 않지만 compose 검증을 통과해야 한다>
+
+# DB 서버 접속 정보
+DB_HOST=192.168.0.20
+DB_PORT_TARGET=3306
+
+FRONTEND_PORT=80
+```
+
+**② 첫 배포는 데스크탑에서 한다** (2.5절). 이미지를 받기 전에 `up` 을 하면 파이가 소스를
+빌드하려 들기 때문이다.
+
+### 2.5 데스크탑에서 배포
+
+JAR 과 `dist` 는 **아키텍처와 무관하다**(JVM 바이트코드와 정적 파일). 그래서 데스크탑에서
+네이티브로 빌드한 산출물을 arm64 이미지에 담기만 하면 된다. `RUN` 이 없으므로 크로스
+빌드에 에뮬레이션이 필요하지 않다 — 실측 **백엔드 1.4초, 프론트엔드 0.3초**다.
+(컨테이너 안에서 Gradle 을 돌리는 `Dockerfile` 은 x86 데스크탑에서 에뮬레이션으로 수십 분
+걸린다)
+
+```bash
+APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+```
+
+스크립트가 순서대로 수행한다.
+
+| 순서 | 내용 |
+|---|---|
+| 1 | SSH 접속과 buildx 확인, 커밋되지 않은 변경 경고 |
+| 2 | `./gradlew bootJar` — 백엔드 JAR |
+| 3 | `npm ci && npm run build` — 프론트엔드 `dist` |
+| 4 | `Dockerfile.dist` 로 arm64 이미지 두 개 생성 (태그는 git 짧은 해시) |
+| 5 | `docker save \| gzip \| ssh 'docker load'` — 약 190MB |
+| 6 | 원격 `.env` 에 `TAG` 를 기록하고 `compose up -d` |
+| 7 | `/actuator/health` 확인 |
+
+옵션과 환경 변수
+
+| 이름 | 기본 | 설명 |
+|---|---|---|
+| `APP_HOST` | (필수) | 앱 서버 SSH 대상 |
+| `REMOTE_DIR` | `~/Beetle` | 원격 저장소 경로 |
+| `TAG` | git 짧은 해시 | 이미지 태그. 원격 `.env` 에 남아 어떤 버전이 떠 있는지 알 수 있다 |
+| `--skip-build` | | 빌드를 건너뛰고 기존 산출물로 이미지만 만든다 |
+| `--no-restart` | | 이미지만 옮기고 원격 재기동은 하지 않는다 |
+
+수동으로 하려면 파이에서 이렇게 띄운다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d
+```
+
+> 배포가 잦아지면 데스크탑에 로컬 레지스트리(`registry:2`)를 두고 파이가 `pull` 하는
+> 방식으로 바꿀 수 있다. 바뀐 레이어만 전송되고 명령이 짧아진다. 지금 구성은 추가 인프라가
+> 필요 없는 대신 매번 전체 이미지를 보낸다.
+
+### 2.6 확인과 접속
+
+```bash
+# 앱 서버에서
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml ps
 curl -fsS http://localhost/actuator/health     # {"groups":[...],"status":"UP"}
 curl -fsS http://localhost/api/categories      # 첫 배포 직후에는 []
 
-# 프로필이 prod 로 떴는지
-docker compose -f docker-compose.yml -f docker-compose.prod.yml logs backend \
-  | grep "profile is active"
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml \
+  logs backend | grep -E "profile is active|Database:"
 ```
 
-같은 네트워크의 다른 기기에서는 파이의 주소로 접속한다.
+- 프로필이 `prod` 이고, `Database:` 줄의 주소가 **DB 서버**를 가리켜야 한다
+- 세 컨테이너 모두 `(healthy)` 로 보여야 한다. 백엔드·프론트엔드에 헬스체크가 있어
+  죽으면 `restart: unless-stopped` 가 되살린다
+- 다른 기기에서는 `http://192.168.0.10` 으로 접속한다
+- 외부에 열리는 것은 앱 서버의 80 하나뿐이다. 백엔드 포트는 노출하지 않고 nginx 가
+  `/api` 를 프록시한다
 
-```bash
-hostname -I        # 예: 192.168.0.12
-```
+**자동 시작**은 준비되어 있다. 세 서비스 모두 `restart: unless-stopped` 이므로 Docker
+서비스가 부팅 시 켜져 있으면(2.2절 ⑤) 두 파이를 재부팅해도 알아서 올라온다.
+**DB 서버를 먼저 켜는 것이 좋다.** 앱 서버가 먼저 떠서 DB 에 붙지 못하면 기동에 실패하고,
+restart 정책이 재시도하는 동안 잠시 접속이 되지 않는다.
 
-- `http://192.168.0.12` 또는 `http://raspberrypi.local`
-- 외부에 열리는 것은 **프론트엔드 하나뿐**이다. 백엔드와 MySQL 포트는 호스트에 노출하지
-  않으며, nginx 가 `/api` 를 백엔드로 프록시한다.
-- 배포 구성에서는 API 문서와 `health` 외의 관리 엔드포인트가 404 다.
-
-### 2.8 공개하기 전에 — 인증이 없다
+### 2.7 공개하기 전에 — 인증이 없다
 
 이 시스템은 **"프라이빗 가계부"** 전제로 만들어졌다.
 
@@ -384,22 +455,28 @@ hostname -I        # 예: 192.168.0.12
 - Cloudflare Tunnel + Access — 포트를 열지 않고 인증까지 붙는다
 - 앞단에 인증과 TLS 를 붙인 리버스 프록시 (Caddy + basic auth, nginx + oauth2-proxy)
 
-### 2.9 라즈베리파이에서 겪을 수 있는 문제
+### 2.8 자주 겪는 문제
 
 | 증상 | 원인과 해결 |
 |---|---|
 | MySQL 컨테이너가 `exec format error` 로 죽는다 | 32-bit OS 다. `uname -m` 이 `armv7l` 이면 64-bit OS 로 다시 설치한다 (2.1절) |
-| 빌드 중 컨테이너가 조용히 죽는다 | 메모리 부족(OOM). 스왑을 늘리거나(2.4-a) 개발 머신에서 빌드해 옮긴다(2.4-b) |
-| 전체가 느리다 | SD 카드의 임의 쓰기 성능 때문일 수 있다. USB SSD 로 옮기는 것이 가장 효과가 크다 |
-| 청구일·소비일이 하루씩 어긋난다 | 파이의 시간대를 확인한다. `timedatectl set-timezone Asia/Seoul`. 컨테이너는 `TZ=Asia/Seoul` 로 고정되어 있다 |
-| 재부팅 후 안 올라온다 | `sudo systemctl enable docker` 가 되어 있는지 확인한다 |
-| 백엔드가 `Access denied` | 첫 기동 이후 `.env` 의 계정을 바꿨다 (1.5절) |
+| 백엔드가 `Communications link failure` 로 재시작을 반복한다 | DB 서버에 닿지 못한다. `nc -vz <DB IP> 3306`, ufw 규칙, `.env` 의 `DB_HOST`/`DB_PORT_TARGET` 을 확인한다 |
+| 백엔드가 `Access denied for user` | 두 파이의 `.env` 계정이 다르거나, DB 서버의 계정이 첫 기동 때 다른 값으로 만들어졌다 (1.5절) |
+| 파이가 소스를 빌드하려 든다 | 이미지를 받지 않고 `up` 을 했다. `.env` 의 `TAG` 가 적재한 이미지 태그와 같은지 확인한다 |
+| 앱 서버가 느리거나 멈춘다 | 메모리를 확인한다(`free -h`). 파이에서 빌드하지 않았는지도 본다 |
+| DB 서버가 느리다 | SD 카드의 임의 쓰기 성능 문제일 수 있다. USB SSD 로 옮기는 것이 가장 효과가 크다 |
+| 소비일·청구일이 하루씩 어긋난다 | 두 파이의 시간대와 NTP 동기를 확인한다 (2.2절 ③) |
+| 재부팅 후 안 올라온다 | `sudo systemctl enable docker` 를 확인한다 |
+| 온도가 높거나 성능이 떨어진다 | `vcgencmd measure_temp`, `vcgencmd get_throttled`(0x0 이 정상). 방열판·팬을 검토한다 |
 
-### 2.10 운영
+### 2.9 운영
 
 백업·복구, 갱신(재배포), 로그 확인, 되돌리기는 [README.md](README.md) 3.6~3.9절에 있다.
-파이에서는 특히 아래 두 가지를 권한다.
+두 대 구성에서 달라지는 점만 적는다.
 
-- **백업을 cron 에 걸고 덤프를 파이 밖으로 옮긴다.** SD 카드 고장은 예고 없이 온다
-- 갱신은 `git pull origin main` 후 다시 기동한다. 2.4-b 로 배포했다면 이미지를 다시 만들어
-  옮긴다
+- **백업은 DB 서버에서** 한다. cron 에 걸고 덤프를 파이 밖으로 옮긴다. SD/SSD 고장은
+  예고 없이 온다
+- **갱신은 데스크탑에서** `./scripts/deploy.sh` 로 한다. 파이에서 `git pull` 만 해도
+  이미지가 바뀌지 않으므로 반영되지 않는다
+- 마이그레이션은 **앱 서버의 백엔드가 뜰 때** 적용된다. 스키마를 바꾸는 배포 전에는
+  DB 서버에서 먼저 백업한다

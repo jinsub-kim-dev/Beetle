@@ -96,6 +96,12 @@ tasks.withType<Test> {
 	finalizedBy(tasks.jacocoTestReport)
 }
 
+// bootJar 만 배포에 쓴다. plain jar 는 쓰이지 않는데 두 개가 남으면 배포용
+// Dockerfile 에서 어느 것을 담을지 와일드카드로 특정할 수 없다.
+tasks.jar {
+	enabled = false
+}
+
 tasks.jacocoTestReport {
 	dependsOn(tasks.test)
 	reports {

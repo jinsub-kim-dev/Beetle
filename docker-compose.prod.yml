@@ -4,6 +4,10 @@
 #
 # 로컬 파일(docker-compose.override.yml)은 `-f` 를 명시하면 적용되지 않는다.
 #
+# 한 호스트에 전부 올리는 구성이다. 서버와 DB 를 나누려면 아래를 덧붙인다.
+#   앱 서버: ... -f docker-compose.prod.yml -f docker-compose.app.yml
+#   DB 서버: ... -f docker-compose.prod.yml -f docker-compose.db.yml
+#
 # 접속 정보에는 기본값을 두지 않는다. 값이 없으면 기동에 실패하며, 이 편이 안전하다.
 # 기본 비밀번호로 배포되는 것보다 뜨지 않는 것이 낫다.
 services:
@@ -19,8 +23,8 @@ services:
   backend:
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      DB_HOST: mysql
-      DB_PORT: 3306
+      # DB 주소는 공통 파일의 기본값(같은 호스트의 mysql 컨테이너)을 쓴다.
+      # 다른 호스트에 두려면 docker-compose.app.yml 을 함께 지정한다.
       DB_NAME: ${DB_NAME:?DB_NAME 을 설정해야 합니다}
       DB_USER: ${DB_USER:?DB_USER 를 설정해야 합니다}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD 를 설정해야 합니다}

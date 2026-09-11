@@ -169,8 +169,9 @@ docker compose version
 메모리는 **2GB 이상**을 권한다. 백엔드 이미지 빌드 시 Gradle 이 의존성을 내려받고
 컴파일하므로 첫 빌드는 몇 분 걸린다.
 
-> **라즈베리파이에 배포한다면** 아키텍처 제약(64-bit OS 필수)과 빌드 전략, 자동 시작
-> 설정까지 [SETUP.md 2절](SETUP.md#2-라즈베리파이-배포)에 정리해 두었다.
+> **라즈베리파이에 배포한다면** — 서버 1대 + DB 1대로 나누는 구성, 아키텍처 제약
+> (64-bit OS 필수), 데스크탑에서 배포하는 방법까지
+> [SETUP.md 2절](SETUP.md#2-라즈베리파이-배포--서버-1대--db-1대)에 정리해 두었다.
 
 ### 3.3 소스와 `.env` 준비
 
@@ -219,6 +220,16 @@ COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
+**서버와 DB 를 다른 호스트에 나누려면** 호스트별 파일을 덧붙인다. 절차는
+[SETUP.md 2절](SETUP.md#2-라즈베리파이-배포--서버-1대--db-1대)에 있다.
+
+```bash
+# 앱 서버 (백엔드 + 프론트엔드, DB 는 외부)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d
+# DB 서버 (MySQL 만, 3306 노출)
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.db.yml up -d
 ```
 
 - 외부에 열리는 것은 **프론트엔드 하나뿐**이다. 백엔드와 MySQL 포트는 호스트에 노출하지

@@ -1,0 +1,19 @@
+# 배포용 이미지는 `build/libs` 의 JAR 를 담아야 하므로 기본 `.dockerignore` 를 쓸 수 없다.
+# (BuildKit 은 `<Dockerfile>.dockerignore` 를 먼저 찾는다)
+.gradle/
+.kotlin/
+.idea/
+*.iml
+.DS_Store
+HELP.md
+src/
+gradle/
+gradlew
+gradlew.bat
+build/classes/
+build/kotlin/
+build/resources/
+build/tmp/
+build/reports/
+build/test-results/
+build/jacoco/

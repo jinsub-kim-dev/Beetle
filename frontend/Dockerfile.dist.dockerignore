@@ -1,0 +1,12 @@
+# 배포용 이미지는 `dist` 를 담아야 하므로 기본 `.dockerignore` 를 쓸 수 없다.
+node_modules/
+coverage/
+.vite/
+.env
+.env.local
+.DS_Store
+CLAUDE.md
+src/
+public/
+*.config.ts
+*.json

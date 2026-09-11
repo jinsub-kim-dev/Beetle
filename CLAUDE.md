@@ -20,6 +20,19 @@
 | 프론트엔드 | `.env.development` | `.env.production` | Vite 모드 (`npm run dev`/`build:dev` vs `build`) |
 | 컨테이너 | `docker-compose.override.yml` (자동 적용) | `docker-compose.prod.yml` (`-f` 로 명시) | 아래 실행 명령어 |
 
+배포는 한 호스트에 전부 올릴 수도 있고, **서버와 DB 를 나눌 수도** 있습니다. 나눌 때는
+호스트별 파일을 덧붙입니다.
+
+| 호스트 | 파일 | 띄우는 것 |
+|---|---|---|
+| 앱 서버 | `docker-compose.app.yml` | 백엔드·프론트엔드. `DB_HOST`·`DB_PORT_TARGET` 필수 |
+| DB 서버 | `docker-compose.db.yml` | MySQL 만. 앱 서버가 붙을 포트를 노출 |
+
+**빌드는 개발 머신에서만 합니다.** JAR 과 `dist` 는 아키텍처와 무관하므로, 네이티브로
+빌드한 산출물을 `Dockerfile.dist`(COPY 전용)로 arm64 이미지에 담습니다. 소스를 컨테이너
+안에서 빌드하는 `Dockerfile` 은 로컬 개발용이며, 라즈베리파이에서 쓰면 매우 느립니다.
+`scripts/deploy.sh` 가 빌드·전송·재기동을 수행합니다.
+
 ### 2.1 환경별 차이
 
 | 항목 | dev | prod | 이유 |
