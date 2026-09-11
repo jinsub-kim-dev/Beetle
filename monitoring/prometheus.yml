@@ -1,0 +1,55 @@
+# 지표 수집 설정.
+#
+# scrape_interval 을 10초로 둔다. 자원 사용 현황을 "실시간에 가깝게" 보려면 이 정도가
+# 필요하고, 그보다 짧게 하면 파이에서 수집 부하와 저장 용량이 빠르게 늘어난다.
+global:
+  scrape_interval: 10s
+  scrape_timeout: 5s
+  external_labels:
+    setup: beetle
+
+scrape_configs:
+  # --- 머신 자원 (CPU · 메모리 · 디스크 · 온도) ---
+  - job_name: node
+    static_configs:
+      - targets: ["node-exporter:9100"]
+        labels: { machine: "앱 서버" }
+      # DB 서버 파이. `db-node` 는 실제 호스트 이름이 아니라 compose 가
+      # `extra_hosts` 로 붙여 주는 별명이고, 그 IP 는 `.env` 의 DB_NODE_IP 다.
+      # 프로메테우스는 설정 파일에서 환경 변수를 펼치지 않으므로 이렇게 우회한다.
+      # 지정하지 않으면 127.0.0.1 을 보게 되어 "DB 서버" 카드가 장애로 보인다.
+      - targets: ["db-node:9100"]
+        labels: { machine: "DB 서버" }
+
+  # --- 백엔드 애플리케이션 지표 (JVM · HTTP · 커넥션 풀) ---
+  # 백엔드 포트는 호스트에 공개되지 않는다. 같은 도커 네트워크에서만 읽는다.
+  - job_name: backend
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets: ["backend:8080"]
+
+  # --- 서비스 헬스체크 (HTTP 응답으로 살아 있는지 판단) ---
+  #
+  # blackbox-exporter 에 "이 주소를 찔러 봐 달라"고 요청하는 방식이다. 그래서 타깃에
+  # 적는 주소는 프로메테우스가 직접 긁는 주소가 아니라 **프로브에 넘길 파라미터**이고,
+  # relabel_configs 가 그 변환을 한다.
+  - job_name: health
+    metrics_path: /probe
+    static_configs:
+      - targets: ["http://backend:8080/actuator/health"]
+        labels: { service: "백엔드", module: "backend_health" }
+      - targets: ["http://frontend/"]
+        labels: { service: "프론트엔드", module: "frontend_http" }
+    relabel_configs:
+      # 타깃 주소를 프로브 파라미터로 옮기고, 실제 접속 대상은 blackbox 로 바꾼다.
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      # 서비스마다 판정 기준이 다르므로 모듈도 라벨에서 가져온다.
+      - source_labels: [module]
+        target_label: __param_module
+      - action: labeldrop
+        regex: module
+      - target_label: __address__
+        replacement: blackbox:9115

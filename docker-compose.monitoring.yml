@@ -1,0 +1,100 @@
+# 모니터링 구성 — 앱 서버에 올린다.
+#
+# 앱과 **같은 compose 프로젝트**에 얹는다. 그래야 프로메테우스가 도커 네트워크
+# 안쪽에서 `backend:8080` / `frontend` 를 직접 긁을 수 있다. 백엔드 포트는 호스트에
+# 공개되지 않으므로 이 방법이 아니면 애플리케이션 지표를 볼 수 없다.
+#
+#   로컬(dev)   docker compose -f docker-compose.yml -f docker-compose.override.yml \
+#                              -f docker-compose.monitoring.yml up -d
+#   배포(prod)  docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+#                              -f docker-compose.app.yml -f docker-compose.monitoring.yml up -d
+#
+# DB 서버 파이에는 `docker-compose.db-monitoring.yml` 로 node-exporter 만 띄운다.
+x-logging: &monitoring-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    container_name: beetle-prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # 10초 주기로 모으면 데이터가 빠르게 쌓인다. 파이의 SD 카드를 고려해 보관
+      # 기간과 용량 상한을 함께 둔다. 둘 중 먼저 닿는 쪽이 적용된다.
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - beetle-prometheus-data:/prometheus
+    # 프로메테우스는 설정 파일에서 환경 변수를 펼치지 않는다. 그래서 DB 서버의 주소를
+    # 설정에 직접 적지 않고, 여기서 `db-node` 라는 이름에 IP 를 붙여 준다.
+    # Compose 는 환경 변수를 펼치므로 주소는 `.env` 한 곳에서만 관리된다.
+    extra_hosts:
+      - "db-node:${DB_NODE_IP:-127.0.0.1}"
+    logging: *monitoring-logging
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    container_name: beetle-grafana
+    environment:
+      TZ: Asia/Seoul
+      # 집 안 네트워크에서 보는 상태 페이지다. 로그인 없이 열리게 하고, 편집은
+      # 관리자만 할 수 있게 둔다. 공유기 포트를 외부로 열 생각이라면 이 두 줄을
+      # 지우고 로그인을 받아야 한다 (SETUP.md 6부).
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-true}
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      # 첫 화면을 상태 대시보드로 고정한다.
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/beetle-status.json
+      GF_USERS_DEFAULT_THEME: dark
+      # 알림·소식 조회 같은 외부 통신을 끈다. 집 안에서만 쓰는 화면이다.
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - beetle-grafana-data:/var/lib/grafana
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    logging: *monitoring-logging
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  blackbox:
+    image: prom/blackbox-exporter:v0.25.0
+    container_name: beetle-blackbox
+    command:
+      - --config.file=/etc/blackbox/blackbox.yml
+    volumes:
+      - ./monitoring/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+    logging: *monitoring-logging
+    restart: unless-stopped
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: beetle-node-exporter
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|host/root/var/lib/docker/.+)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    # 호스트의 프로세스·네트워크를 그대로 봐야 머신 자원을 잴 수 있다.
+    pid: host
+    logging: *monitoring-logging
+    restart: unless-stopped
+
+volumes:
+  beetle-prometheus-data:
+  beetle-grafana-data:

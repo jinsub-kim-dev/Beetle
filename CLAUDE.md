@@ -41,10 +41,10 @@
 | 시드 데이터 (`db/seed`) | 적용 | **미적용** | 데모 데이터가 실제 데이터와 섞이면 안 됩니다 |
 | Flyway `baseline-on-migrate` | 허용 | 금지 | 비어 있지 않은 DB 에 처음 배포하면 실패해야 하고, 그때 사람이 판단해야 합니다 |
 | API 문서 (`/swagger-ui.html`) | 노출 | 차단(404) | 스펙을 외부에 드러낼 이유가 없습니다 |
-| 관리 엔드포인트 | health,info,metrics,env,beans,mappings | **health 만** | `env`/`beans` 는 설정과 내부 구조를 드러냅니다 |
+| 관리 엔드포인트 | health,info,metrics,env,beans,mappings,prometheus | **health,prometheus 만** | `env`/`beans` 는 설정과 내부 구조를 드러냅니다. `prometheus` 는 모니터링이 읽으며, 호스트에 공개되지 않고 nginx 가 `/actuator/health` 외의 `/actuator/*` 를 404 로 막습니다 |
 | 오류 응답 | 예외 메시지 포함 | code/message 만 | PRD 7.1 의 오류 규약만 노출합니다 |
 | SQL 로그 | 출력 | 미출력 | |
-| 호스트 포트 노출 | MySQL(13306)·백엔드·프론트엔드 | **프론트엔드만** | 브라우저가 보는 오리진은 하나이며 nginx 가 `/api` 를 프록시합니다 |
+| 호스트 포트 노출 | MySQL(13306)·백엔드·프론트엔드 | **프론트엔드만** (모니터링을 올리면 Grafana 3000 추가) | 브라우저가 보는 오리진은 하나이며 nginx 가 `/api` 를 프록시합니다 |
 | 프론트엔드 소스맵 | 포함 | 미포함 | 원본 코드가 그대로 노출됩니다 |
 | 화면 환경 배지 | `LOCAL` 표시 | 미표시 | 로컬 화면을 배포 화면으로 착각하고 데이터를 넣는 일을 막습니다 |
 
@@ -74,6 +74,14 @@ docker compose down -v            # 데이터까지 초기화
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 ```
+
+**모니터링** — 파일을 하나 더 얹습니다. 앱과 **같은 compose 프로젝트**여야 프로메테우스가
+도커 네트워크 안쪽에서 `backend:8080` 을 긁을 수 있습니다.
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml \
+               -f docker-compose.monitoring.yml up -d        # 로컬
+```
+설정과 대시보드는 `monitoring/` 에 있고, 절차는 `SETUP.md` 5부에 있습니다.
 
 - **기본 접속 주소**
 
@@ -153,7 +161,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 
 절차 문서는 위 우선순위 밖이며, 위 문서들의 정책을 **실행 순서로 풀어 쓴 것**이다.
 정책이 바뀌면 절차 문서도 함께 고친다.
-- `SETUP.md` — 환경 구축 절차 (로컬 처음부터, 라즈베리파이 배포)
+- `SETUP.md` — 환경 구축 절차 (로컬 처음부터, 라즈베리파이 배포, 모니터링)
 - `README.md` — 실행 명령 요약과 운영(백업·로그·되돌리기)
 - `FEATURES.md` — 제공하는 기능 전체와 사용 방법. 화면 기준으로 정리하며,
   규칙의 근거는 `BEETLE_PRD.md` 를 가리킨다

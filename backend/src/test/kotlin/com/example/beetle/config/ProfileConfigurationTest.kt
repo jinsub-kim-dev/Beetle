@@ -151,9 +151,12 @@ class ProfileConfigurationTest {
         }
 
         @Test
-        fun `헬스체크 외의 관리 엔드포인트를 노출하지 않는다`() {
-            // env/beans 는 설정과 내부 구조를 드러낸다
-            assertThat(prod.getValue("management.endpoints.web.exposure.include")).isEqualTo("health")
+        fun `헬스체크와 지표 외의 관리 엔드포인트를 노출하지 않는다`() {
+            // env/beans 는 설정과 내부 구조를 드러낸다.
+            // prometheus 는 모니터링에 필요하지만 호스트에 공개되지 않는다. 배포 구성은
+            // 백엔드 포트를 발행하지 않고 nginx 도 /actuator/health 만 프록시한다.
+            assertThat(prod.getValue("management.endpoints.web.exposure.include"))
+                .isEqualTo("health,prometheus")
             assertThat(prod["management.endpoint.health.show-details"]).isEqualTo("never")
         }
 

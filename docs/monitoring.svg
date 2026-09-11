@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 380" width="900" height="380"
+     role="img" aria-label="Beetle 모니터링 구성: 앱 서버 파이에 Grafana·Prometheus·blackbox·node-exporter 가 돌고, DB 서버 파이에는 node-exporter 만 둔다. 데스크탑 브라우저가 앱 서버의 3000 포트로 상태 화면을 본다">
+  <title>Beetle 모니터링 구성</title>
+  <desc>모니터링의 두뇌는 앱 서버 파이에만 있다. Prometheus 가 10초마다 양쪽 파이의 node-exporter, 백엔드의 /actuator/prometheus, blackbox 를 통한 헬스체크를 모으고 Grafana 가 상태 페이지를 보여 준다. DB 서버 파이에는 자원 지표를 내보내는 node-exporter 하나만 올린다.</desc>
+
+  <style>
+    .bg     { fill: #ffffff; }
+    .net    { fill: none; stroke: #b8c0cc; stroke-width: 1.5; stroke-dasharray: 6 5; }
+    .netlbl { fill: #6b7684; }
+    .card   { fill: #f7f9fc; stroke: #c8d1de; stroke-width: 1.5; }
+    .accent { fill: #eef2ff; stroke: #a5b4fc; }
+    .db     { fill: #fff7ed; stroke: #fdba74; }
+    .inner  { fill: #ffffff; stroke: #c8d1de; stroke-width: 1.2; }
+    .name   { fill: #1f2328; font-weight: 700; }
+    .role   { fill: #4b5563; }
+    .muted  { fill: #6b7684; }
+    .arrow  { stroke: #6b7684; stroke-width: 2; fill: none; }
+    .arrlbl { fill: #4b5563; font-weight: 600; }
+    text    { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
+
+    @media (prefers-color-scheme: dark) {
+      .bg     { fill: #0d1117; }
+      .net    { stroke: #3d444d; }
+      .netlbl { fill: #9198a1; }
+      .card   { fill: #161b22; stroke: #3d444d; }
+      .accent { fill: #17203a; stroke: #4c5da8; }
+      .db     { fill: #2a1e11; stroke: #9a6534; }
+      .inner  { fill: #0d1117; stroke: #3d444d; }
+      .name   { fill: #e6edf3; }
+      .role   { fill: #c9d1d9; }
+      .muted  { fill: #9198a1; }
+      .arrow  { stroke: #9198a1; }
+      .arrlbl { fill: #c9d1d9; }
+    }
+  </style>
+
+  <defs>
+    <marker id="head" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" fill="context-stroke"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="900" height="380"/>
+
+  <!-- 같은 네트워크 -->
+  <rect class="net" x="20" y="58" width="860" height="282" rx="14"/>
+  <text class="netlbl" x="40" y="84" font-size="13">집 공유기 · 스위칭 허브</text>
+
+  <!-- 데스크탑 브라우저 -->
+  <rect class="card" x="45" y="140" width="185" height="110" rx="10"/>
+  <text class="name" x="63" y="170" font-size="15">데스크탑 브라우저</text>
+  <text class="role" x="63" y="198" font-size="13">상태 페이지를 본다</text>
+  <text class="muted" x="63" y="224" font-size="12">파이에는 화면이 없다</text>
+
+  <!-- 앱 서버 파이 -->
+  <rect class="card accent" x="285" y="100" width="320" height="222" rx="10"/>
+  <text class="name" x="303" y="128" font-size="15">앱 서버 파이</text>
+  <text class="muted" x="303" y="148" font-size="12">모니터링의 두뇌가 여기에만 있다</text>
+
+  <rect class="inner" x="301" y="160" width="288" height="88" rx="8"/>
+  <text class="role" x="315" y="181" font-size="12.5" font-weight="700">grafana</text>
+  <text class="muted" x="385" y="181" font-size="12">상태 화면 · :3000 공개</text>
+  <text class="role" x="315" y="203" font-size="12.5" font-weight="700">prometheus</text>
+  <text class="muted" x="398" y="203" font-size="12">10초마다 수집 · 15일 보관</text>
+  <text class="role" x="315" y="225" font-size="12.5" font-weight="700">blackbox</text>
+  <text class="muted" x="378" y="225" font-size="12">헬스체크를 직접 찔러 본다</text>
+  <text class="role" x="315" y="243" font-size="12.5" font-weight="700">node-exporter</text>
+  <text class="muted" x="415" y="243" font-size="12">이 머신의 자원</text>
+
+  <rect class="inner" x="301" y="268" width="288" height="40" rx="8"/>
+  <text class="role" x="315" y="293" font-size="12.5">감시 대상 — backend · frontend</text>
+
+  <!-- DB 서버 파이 -->
+  <rect class="card db" x="660" y="100" width="195" height="222" rx="10"/>
+  <text class="name" x="678" y="128" font-size="15">DB 서버 파이</text>
+  <text class="muted" x="678" y="148" font-size="12">exporter 하나만 올린다</text>
+
+  <rect class="inner" x="676" y="164" width="163" height="52" rx="8"/>
+  <text class="role" x="690" y="185" font-size="12.5" font-weight="700">node-exporter</text>
+  <text class="muted" x="690" y="205" font-size="12">:9100 · 앱 서버만 허용</text>
+
+  <rect class="inner" x="676" y="238" width="163" height="52" rx="8"/>
+  <text class="role" x="690" y="259" font-size="12.5" font-weight="700">mysql</text>
+  <text class="muted" x="690" y="279" font-size="12">감시 대상이 아니라 이웃</text>
+
+  <!-- 브라우저 -> grafana -->
+  <path class="arrow" d="M 233 190 L 280 190" marker-end="url(#head)"/>
+  <text class="arrlbl" x="256" y="178" font-size="12" text-anchor="middle">:3000</text>
+
+  <!-- 모니터링 -> 감시 대상 (같은 도커 네트워크 안) -->
+  <path class="arrow" d="M 445 251 L 445 264" marker-end="url(#head)"/>
+  <text class="muted" x="433" y="262" font-size="11" text-anchor="end">도커 네트워크 안에서</text>
+
+  <!-- prometheus -> DB 파이 node-exporter -->
+  <path class="arrow" d="M 592 190 L 655 190" marker-end="url(#head)"/>
+  <text class="arrlbl" x="623" y="178" font-size="12" text-anchor="middle">:9100</text>
+
+  <text class="muted" x="450" y="356" font-size="12" text-anchor="middle">백엔드의 /actuator/prometheus 는 호스트에 공개하지 않는다 — 도커 네트워크 안에서만 읽는다</text>
+</svg>

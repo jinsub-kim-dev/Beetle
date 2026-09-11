@@ -167,8 +167,28 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 > **파이 준비부터 배포·운영까지의 전체 절차는 [SETUP.md](SETUP.md) 에 있다.** 고정 IP,
 > SSH 하드닝, 방화벽, 백업 자동화, 재배포, 되돌리기, 환경 변수 전체 목록을 담았다.
 >
-> **인증이 없다.** 공개 인터넷에 노출하기 전에 [SETUP.md 5부](SETUP.md#5부-공개하기-전에--인증이-없다)
+> **인증이 없다.** 공개 인터넷에 노출하기 전에 [SETUP.md 6부](SETUP.md#6부-공개하기-전에--인증이-없다)
 > 를 읽는다.
+
+### 모니터링 (선택)
+
+파이 2대의 상태·CPU·메모리와 백엔드·프론트엔드의 헬스체크를 한 화면에서 본다. 파일을
+하나 더 얹으면 된다.
+
+```bash
+# 앱 서버 파이 — Grafana · Prometheus · blackbox · node-exporter
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+               -f docker-compose.app.yml -f docker-compose.monitoring.yml up -d
+# DB 서버 파이 — 자원 지표만 내보낸다
+docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
+```
+
+앱 서버의 `:3000` 을 열면 상태 페이지가 뜬다. 앱 서버 `.env` 에 DB 서버 파이의 **IP** 를
+`DB_NODE_IP` 로 적어야 두 대가 모두 보인다. 로컬에서도
+`-f docker-compose.override.yml -f docker-compose.monitoring.yml` 로 같은 화면을 띄울 수
+있다(머신이 하나이므로 "DB 서버 머신" 은 중단으로 보인다).
+
+> 자세한 내용은 [SETUP.md 5부](SETUP.md#5부-모니터링--상태-페이지).
 
 ---
 
@@ -183,10 +203,10 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 | 시드 데이터 | 적용 | 미적용 (빈 상태로 시작) |
 | Flyway `baseline-on-migrate` | 허용 | 금지 |
 | API 문서 | 노출 | 404 |
-| 관리 엔드포인트 | health·info·metrics·env·beans·mappings | **health 만** |
+| 관리 엔드포인트 | health·info·metrics·env·beans·mappings·prometheus | **health·prometheus 만** |
 | 오류 응답 | 예외 메시지 포함 | `code`/`message` 만 |
 | SQL 로그 | 출력 | 미출력 |
-| 노출 포트 | 프론트(5173)·백엔드(8080)·MySQL(13306) | **프론트엔드만** (기본 80) |
+| 노출 포트 | 프론트(5173)·백엔드(8080)·MySQL(13306) | **프론트엔드만** (기본 80). 모니터링을 올리면 Grafana(3000) 추가 |
 | 프론트엔드 소스맵 | 포함 | 미포함 |
 | 화면 배지 | `LOCAL` 표시 | 없음 |
 

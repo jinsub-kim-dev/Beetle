@@ -38,6 +38,9 @@ JAR 과 정적 파일은 아키텍처와 무관하므로 데스크탑에서 만�
 | `docker-compose.db.yml` | 배포: DB 서버 호스트 |
 | `backend/Dockerfile` · `frontend/Dockerfile` | 로컬 개발용. 컨테이너 안에서 소스를 빌드한다 |
 | `backend/Dockerfile.dist` · `frontend/Dockerfile.dist` | **배포용.** 미리 만든 산출물만 담는다 |
+| `docker-compose.monitoring.yml` | 모니터링 — 앱 서버에 얹는다 (5부) |
+| `docker-compose.db-monitoring.yml` | 모니터링 — DB 서버에 올리는 exporter (5부) |
+| `monitoring/` | 프로메테우스·Grafana 설정과 대시보드 |
 | `scripts/deploy.sh` | 데스크탑 → 앱 서버 배포 |
 
 로컬은 명령이 짧고(`docker compose up -d`), 배포는 파일을 명시해야 한다. **실수로 빠뜨렸을
@@ -661,13 +664,156 @@ docker compose up -d
 
 ---
 
-# 5부. 공개하기 전에 — 인증이 없다
+# 5부. 모니터링 — 상태 페이지
+
+파이 2대의 상태와 자원, 그리고 백엔드·프론트엔드가 살아 있는지를 한 화면에서 본다.
+
+## 5.1 무엇이 어디서 도는가
+
+![Beetle 모니터링 구성](docs/monitoring.svg)
+
+**모니터링의 두뇌는 앱 서버 파이에만 올린다.** DB 서버 파이에는 자기 자원을 내보내는
+`node-exporter` 하나만 둔다. 파이마다 화면을 띄우는 것이 아니라, 앱 서버의 Grafana
+한 곳에서 두 대를 같이 본다.
+
+| 컨테이너 | 어디에 | 하는 일 |
+|---|---|---|
+| `grafana` | 앱 서버 | 상태 화면. 브라우저로 여는 곳 |
+| `prometheus` | 앱 서버 | 10초마다 지표를 모아 보관한다 |
+| `blackbox` | 앱 서버 | 백엔드·프론트엔드에 실제로 HTTP 요청을 보내 살아 있는지 본다 |
+| `node-exporter` | **양쪽 파이** | 그 머신의 CPU·메모리·디스크·온도를 내보낸다 |
+
+수집 주기는 10초다(`monitoring/prometheus.yml` 의 `scrape_interval`). 더 짧게 하면 파이의
+수집 부하와 SD 카드 쓰기가 빠르게 늘어난다. 보관 기간은 15일, 용량 상한은 2GB 이며 둘 중
+먼저 닿는 쪽이 적용된다.
+
+백엔드 지표(JVM 힙·HTTP 요청·DB 커넥션 풀)는 `/actuator/prometheus` 에서 온다. 이 경로는
+**호스트에 공개되지 않는다.** 같은 도커 네트워크 안의 프로메테우스만 읽고, nginx 는
+`/actuator/health` 만 통과시키고 나머지 `/actuator/*` 는 404 로 막는다.
+
+## 5.2 DB 서버 파이에 올리기
+
+앱 서버의 프로메테우스가 긁을 포트를 연다.
+
+```bash
+# DB 서버에서
+cd ~/Beetle
+docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
+```
+
+프로젝트 이름(`-p`)을 따로 주는 이유: 이 호스트의 MySQL 은 다른 compose 파일로 떠 있으므로,
+모니터링만 따로 올리고 따로 내릴 수 있게 분리한다.
+
+**방화벽으로 앱 서버만 허용한다.** 열어 두면 같은 네트워크의 다른 기기가 이 머신의 자원
+정보를 읽을 수 있다.
+
+```bash
+# DB 서버에서
+sudo ufw allow from 192.168.0.10 to any port 9100 proto tcp
+```
+
+확인한다.
+
+```bash
+# 앱 서버에서
+curl -s http://192.168.0.20:9100/metrics | head -3
+```
+
+## 5.3 앱 서버 파이에 올리기
+
+`.env` 에 DB 서버의 주소를 적는다.
+
+```bash
+# .env — 앱 서버 (기존 값에 아래를 추가)
+DB_NODE_IP=192.168.0.20
+GRAFANA_PORT=3000
+GRAFANA_ANONYMOUS=true
+GRAFANA_ADMIN_PASSWORD=<바꿀 비밀번호>
+```
+
+`DB_NODE_IP` 는 **IP 로 적어야 한다.** 프로메테우스는 설정 파일에서 환경 변수를 펼치지
+않으므로, compose 가 이 값을 `db-node` 라는 별명에 붙여 주고 `monitoring/prometheus.yml` 은
+그 별명만 본다. 값이 없으면 `127.0.0.1` 을 보게 되어 "DB 서버 머신" 이 중단으로 표시된다.
+
+파일을 하나 더 얹어 띄운다. **앱과 같은 compose 프로젝트여야 한다.** 그래야 프로메테우스가
+도커 네트워크 안쪽에서 `backend:8080` 을 직접 긁을 수 있다.
+
+```bash
+# 앱 서버에서
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+               -f docker-compose.app.yml -f docker-compose.monitoring.yml up -d
+```
+
+`.env` 에 `COMPOSE_FILE` 을 쓰고 있다면(4.3절) 그 줄 끝에 `:docker-compose.monitoring.yml`
+을 붙이고 `docker compose up -d` 만 실행한다.
+
+브라우저에서 `http://192.168.0.10:3000` 을 연다. 로그인 없이 `Beetle 상태` 대시보드가
+첫 화면으로 열린다.
+
+## 5.4 화면 읽는 법
+
+| 영역 | 보여 주는 것 |
+|---|---|
+| 상태 (카드 4개) | 앱 서버 머신 · DB 서버 머신 · 백엔드 · 프론트엔드. 초록 `정상`, 빨강 `중단`/`장애` |
+| 최근 이력 | 시간대별 상태를 칸으로 나열한다. 언제 끊겼는지 되짚는 곳 |
+| 머신 자원 | 두 파이의 CPU·메모리 사용률, 메모리 사용량, 디스크 여유, CPU 온도 |
+| 애플리케이션 | JVM 힙, 초당 HTTP 요청(상태 코드별), DB 커넥션 풀 |
+
+판정 기준은 서비스마다 다르다.
+
+- **머신** — 그 머신의 `node-exporter` 가 응답하는지. 머신이 꺼지거나 네트워크가 끊기면 중단
+- **백엔드** — `/actuator/health` 가 200 이고 종합 상태가 `UP` 인지. **200 만으로 보지 않는다.**
+  DB 연결을 잃으면 응답은 오지만 상태가 `DOWN` 이 되고, 그 경우 장애로 잡는다
+- **프론트엔드** — nginx 가 `index.html` 을 내려주는지
+
+`CPU 온도` 는 온도 센서가 있는 환경에서만 나온다. 라즈베리파이에서는 보이고, 도커 데스크톱의
+가상 머신에서는 비어 있다. 80도를 넘으면 스로틀링이 걸려 성능이 떨어진다
+(`vcgencmd get_throttled` 로도 확인할 수 있다, 4.3절).
+
+## 5.5 로컬에서 확인하기
+
+배포 전에 데스크탑에서 같은 화면을 띄워 볼 수 있다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.override.yml \
+               -f docker-compose.monitoring.yml up -d
+```
+
+`http://localhost:3000` 을 연다. **"DB 서버 머신" 은 중단으로 보이는 것이 정상이다.**
+로컬에는 머신이 하나뿐이다.
+
+## 5.6 알림은 없다
+
+현재 구성은 **보는 것만 한다.** 서비스가 멈춰도 알려 주지 않으므로 화면을 열어 봐야 안다.
+알림이 필요해지면 두 방향이 있다.
+
+- Grafana 의 알림 기능을 켠다. `monitoring/grafana/provisioning/alerting/` 에 규칙 파일을
+  두면 프로비저닝된다 (지금은 비어 있다)
+- Uptime Kuma 를 따로 올린다. 화면에서 클릭으로 감시 대상과 알림 채널을 붙일 수 있어
+  설정이 더 짧다
+
+## 5.7 자원 사용량
+
+모니터링 컨테이너 4개를 합쳐 대략 200~300MB 를 쓴다. 앱 서버 파이의 메모리가 4GB 라면
+백엔드(약 420MB)와 함께 올려도 여유가 있다. 프로메테우스의 데이터는 도커 볼륨
+(`beetle-prometheus-data`)에 쌓이고 2GB 를 넘지 않는다.
+
+```bash
+docker stats --no-stream
+```
+
+---
+
+# 6부. 공개하기 전에 — 인증이 없다
 
 이 시스템은 **"프라이빗 가계부"** 전제로 만들어졌다.
 
 - **인증이 없다.** 단일 사용자를 가정해 로그인을 구현하지 않았다. 주소를 아는 누구나 읽고
   쓰고 지울 수 있다
 - **HTTPS 가 없다.** nginx 는 80 포트로 평문 제공한다
+- **상태 화면도 열려 있다.** 모니터링을 올렸다면 `:3000` 이 로그인 없이 열린다
+  (`GRAFANA_ANONYMOUS=true`). 머신 자원과 요청량이 그대로 보이므로, 밖에서 접근할 수 있게
+  만들 거라면 `false` 로 두고 `GRAFANA_ADMIN_PASSWORD` 를 바꾼다
 
 집 안에서만 쓸 것이면 공유기의 포트 포워딩을 **열지 않는 것**으로 충분하다. 밖에서 써야
 하면 아래 중 하나를 먼저 갖춘다.
@@ -678,7 +824,7 @@ docker compose up -d
 
 ---
 
-# 6부. 배포 환경에서 겪는 문제
+# 7부. 배포 환경에서 겪는 문제
 
 | 증상 | 원인과 해결 |
 |---|---|
@@ -693,6 +839,9 @@ docker compose up -d
 | 소비일·청구일이 하루씩 어긋난다 | 두 파이의 시간대와 NTP 동기 확인 (2.3절 ①) |
 | 재부팅 후 안 올라온다 | `sudo systemctl enable docker` 확인 |
 | 온도가 높거나 성능이 떨어진다 | `vcgencmd get_throttled` 가 `0x0` 이 아니면 전원·냉각을 점검한다 |
+| 상태 화면의 "DB 서버 머신" 이 계속 중단이다 | 앱 서버 `.env` 의 `DB_NODE_IP` 가 없거나 틀렸다. **호스트 이름이 아니라 IP 여야 한다** (5.3절). DB 서버의 ufw 가 9100 을 막고 있는지도 본다 |
+| 상태 화면에 애플리케이션 패널만 비어 있다 | 모니터링을 앱과 **다른 compose 프로젝트**로 띄웠다. 같은 프로젝트여야 `backend:8080` 에 닿는다 (5.3절) |
+| 상태 화면의 `CPU 온도` 가 비어 있다 | 온도 센서가 없는 환경이다. 라즈베리파이에서는 나온다 (5.4절) |
 
 ---
 
@@ -717,6 +866,12 @@ docker compose up -d
 | `COMPOSE_FILE` | — | 선택 | 선택 | — | `-f` 생략용 (4.3절) |
 | `SPRING_PROFILES_ACTIVE` | 선택 | 고정 `prod` | 고정 `prod` | `dev` | 배포 파일이 고정한다 |
 | `FRONTEND_BUILD_MODE` | 선택 | — | — | 로컬 `development` | 로컬 이미지 빌드 모드 |
+| `GRAFANA_PORT` | 선택 | 선택 | — | `3000` | 상태 화면 포트 (5부) |
+| `GRAFANA_ANONYMOUS` | 선택 | 선택 | — | `true` | 로그인 없이 상태 화면 열기 |
+| `GRAFANA_ADMIN_PASSWORD` | 선택 | 선택 | — | `admin` | 상태 화면 관리자 비밀번호 |
+| `DB_NODE_IP` | — | 선택 | — | `127.0.0.1` | DB 서버 파이의 **IP**. 없으면 DB 서버가 중단으로 보인다 |
+| `NODE_EXPORTER_PORT` | — | — | 선택 | `9100` | 앱 서버가 긁을 포트 |
+| `NODE_EXPORTER_BIND` | — | — | 선택 | `0.0.0.0` | 그 포트를 특정 인터페이스에만 열 때 |
 
 프론트엔드 빌드 시점 변수(`VITE_*`)는 `frontend/.env.development` 와
 `frontend/.env.production` 에 있고 커밋된다. 브라우저로 그대로 내려가므로 **비밀 값을 넣지
@@ -741,4 +896,11 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 # DB 서버 파이
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.db.yml up -d
+
+# 모니터링 (5부) — 앱 서버 파이: 파일을 하나 더 얹는다
+docker compose -f docker-compose.yml -f docker-compose.prod.yml \
+               -f docker-compose.app.yml -f docker-compose.monitoring.yml up -d
+
+# 모니터링 — DB 서버 파이: exporter 만
+docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
 ```

@@ -25,6 +25,8 @@ dependencies {
 	implementation("org.springframework.boot:spring-boot-starter-validation")
 	implementation("org.springframework.boot:spring-boot-starter-webmvc")
 	implementation("org.springframework.boot:spring-boot-starter-actuator")
+	// Prometheus 형식 지표. JVM·HTTP·커넥션 풀 상태를 /actuator/prometheus 로 노출한다.
+	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 	// API 문서화. springdoc 3.x 가 Spring Boot 4 대응 버전이다.
 	implementation("org.springdoc:springdoc-openapi-starter-webmvc-ui:3.1.1")
 	implementation("org.jetbrains.kotlin:kotlin-reflect")

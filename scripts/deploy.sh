@@ -89,8 +89,14 @@ ssh "$APP_HOST" "
   else
     echo 'TAG=$TAG' >> .env
   fi
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d
-  docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml ps
+  # 모니터링이 올라가 있으면 그 파일도 함께 지정한다. 빠뜨리면 compose 가 모니터링
+  # 컨테이너를 고아로 보고 경고하며, --remove-orphans 를 붙이는 순간 내려간다.
+  set -- -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml
+  if docker ps -a --format '{{.Names}}' | grep -qx beetle-prometheus; then
+    set -- \"\$@\" -f docker-compose.monitoring.yml
+  fi
+  docker compose \"\$@\" up -d
+  docker compose \"\$@\" ps
 "
 
 step "상태 확인"

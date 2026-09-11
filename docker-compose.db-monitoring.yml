@@ -1,0 +1,32 @@
+# DB 서버 파이의 모니터링 구성 — 자원 지표만 내보낸다.
+#
+#   docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
+#
+# 앱 서버의 프로메테우스가 이 포트를 긁는다. **방화벽으로 앱 서버만 허용해야 한다.**
+#   sudo ufw allow from <앱 서버 IP> to any port 9100 proto tcp
+#
+# 프로젝트 이름을 따로 주는 이유: 이 호스트의 MySQL 은 `docker-compose.yml` 로 떠
+# 있으므로, 모니터링을 따로 올리고 따로 내릴 수 있게 분리한다.
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    container_name: beetle-node-exporter
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/host/root
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|host/root/var/lib/docker/.+)($$|/)
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro,rslave
+    pid: host
+    ports:
+      # 앱 서버만 붙을 수 있게 좁히려면 NODE_EXPORTER_BIND 를 그 인터페이스 주소로 둔다.
+      - "${NODE_EXPORTER_BIND:-0.0.0.0}:${NODE_EXPORTER_PORT:-9100}:9100"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped

@@ -403,9 +403,11 @@ Beetle/                        # 루트 디렉토리
  ┣ BEETLE_PRD.md               # 전체 프로젝트 기획 및 요구사항 정의서 (도메인 요구사항의 정본)
  ┣ CLAUDE.md                   # 루트 프로젝트(인프라/모노레포/공통 원칙) 가이드
  ┣ README.md                   # 실행 명령 요약과 운영 안내
- ┣ SETUP.md                    # 환경 구축 절차 (로컬, 라즈베리파이 배포)
+ ┣ SETUP.md                    # 환경 구축 절차 (로컬, 라즈베리파이 배포, 모니터링)
  ┣ FEATURES.md                 # 제공 기능 안내 (화면 기준)
  ┣ docs/architecture.svg       # 배포 구성도 (라이트·다크 모두 대응)
+ ┣ docs/monitoring.svg         # 모니터링 구성도
+ ┣ monitoring/                 # Prometheus · blackbox · Grafana 설정과 상태 대시보드
  ┣ scripts/deploy.sh           # 데스크탑 -> 앱 서버 배포
  ┣ docker-compose.yml          # 로컬 인프라 (MySQL + 백엔드 + 프론트엔드) 통합 실행
  ┣ .env.example                # 포트/비밀번호 오버라이드 예시
@@ -467,8 +469,15 @@ Beetle/                        # 루트 디렉토리
   | 컨테이너 | `docker-compose.override.yml` (자동 적용) | `docker-compose.prod.yml` (`-f` 로 명시) |
 
   배포 환경은 **접속 정보에 기본값을 두지 않아 없으면 기동에 실패**하고, **시드 데이터를
-  적용하지 않으며**, API 문서와 관리 엔드포인트(health 제외)를 차단하고, 프론트엔드 포트만
-  호스트에 노출합니다. 이 정책은 `ProfileConfigurationTest` 가 설정 파일을 읽어 검증합니다
+  적용하지 않으며**, API 문서와 관리 엔드포인트(`health`·`prometheus` 제외)를 차단하고,
+  프론트엔드 포트만 호스트에 노출합니다. 이 정책은 `ProfileConfigurationTest` 가 설정 파일을
+  읽어 검증합니다
+- **모니터링:** Prometheus 가 10초 주기로 지표를 모으고 Grafana 가 상태 페이지를 보여 줍니다.
+  머신 자원은 양쪽 호스트의 node-exporter, 서비스 생존 여부는 blackbox-exporter 의 HTTP 프로브,
+  애플리케이션 지표는 백엔드의 `/actuator/prometheus`(micrometer)에서 옵니다. 이 경로는 호스트에
+  공개되지 않고 같은 도커 네트워크 안에서만 읽히며, nginx 는 `/actuator/health` 외의
+  `/actuator/*` 를 404 로 막습니다. 별도 compose 파일(`docker-compose.monitoring.yml`)이라
+  올리지 않아도 서비스는 그대로 동작합니다
 - **데이터 영속성:** Docker Volume을 활용하여 MySQL 데이터 유실 방지
 - **스키마 관리:** Flyway 로만 관리하며 Hibernate 는 `ddl-auto=validate` 로 검증만 수행합니다. 스키마(`db/migration`)와 시드 데이터(`db/seed`)를 분리해, 빈 DB 를 전제로 하는 테스트에는 시드를 적용하지 않습니다.
 - **통합 테스트:** H2 대신 **Testcontainers 로 실제 MySQL** 을 사용합니다. 방언 차이로 인한 거짓 통과·거짓 실패를 막기 위함입니다.

@@ -45,7 +45,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,env,beans,mappings
+        include: health,info,metrics,env,beans,mappings,prometheus
   endpoint:
     health:
       show-details: always

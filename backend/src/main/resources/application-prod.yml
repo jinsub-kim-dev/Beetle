@@ -51,8 +51,12 @@ management:
   endpoints:
     web:
       exposure:
-        # 헬스체크만 노출한다. env/beans 는 설정과 내부 구조를 드러낸다.
-        include: health
+        # 헬스체크와 지표만 노출한다. env/beans 는 설정과 내부 구조를 드러낸다.
+        #
+        # prometheus 엔드포인트는 **호스트에 공개되지 않는다.** 배포 구성은 백엔드 포트를
+        # 발행하지 않고, nginx 도 /actuator/health 만 프록시한다(그 외는 404). 지표는
+        # 같은 도커 네트워크의 Prometheus 컨테이너만 읽는다.
+        include: health,prometheus
   endpoint:
     health:
       show-details: never

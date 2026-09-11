@@ -1,0 +1,28 @@
+# HTTP 헬스체크 프로브.
+#
+# 서비스마다 "살아 있다"의 기준이 다르므로 모듈을 나눈다. 200 응답만으로 판단하면
+# 백엔드가 DB 연결을 잃은 상태를 정상으로 오해할 수 있다.
+modules:
+  # 백엔드: /actuator/health 의 종합 상태가 UP 이어야 정상이다.
+  # (components 안에 UP 이 섞여 있어도 최상위가 DOWN 이면 아래 정규식에 걸리지 않는다.
+  #  최상위 status 는 JSON 의 맨 끝에 오므로 `"status":"UP"}` 로 구분한다.)
+  backend_health:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      fail_if_body_not_matches_regexp:
+        - '"status":"UP"\}\s*$'
+
+  # 프론트엔드: nginx 가 index.html 을 내려주면 정상이다.
+  frontend_http:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: [200]
+      preferred_ip_protocol: ip4
+      fail_if_body_not_matches_regexp:
+        - '(?i)<!doctype html>'
