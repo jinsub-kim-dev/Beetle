@@ -142,6 +142,8 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
 정책이 바뀌면 절차 문서도 함께 고친다.
 - `SETUP.md` — 환경 구축 절차 (로컬 처음부터, 라즈베리파이 배포)
 - `README.md` — 실행 명령 요약과 운영(백업·로그·되돌리기)
+- `FEATURES.md` — 제공하는 기능 전체와 사용 방법. 화면 기준으로 정리하며,
+  규칙의 근거는 `BEETLE_PRD.md` 를 가리킨다
 
 작업 대상 영역의 문서(2 또는 3)가 본 문서보다 구체적이면 그쪽을 따릅니다.
 단 `BEETLE_PRD.md` 의 도메인 요구사항과 충돌할 수는 없습니다.

@@ -404,6 +404,7 @@ Beetle/                        # 루트 디렉토리
  ┣ CLAUDE.md                   # 루트 프로젝트(인프라/모노레포/공통 원칙) 가이드
  ┣ README.md                   # 실행 명령 요약과 운영 안내
  ┣ SETUP.md                    # 환경 구축 절차 (로컬, 라즈베리파이 배포)
+ ┣ FEATURES.md                 # 제공 기능 안내 (화면 기준)
  ┣ docker-compose.yml          # 로컬 인프라 (MySQL + 백엔드 + 프론트엔드) 통합 실행
  ┣ .env.example                # 포트/비밀번호 오버라이드 예시
  ┣ backend/                    # 백엔드 서버 (Spring Boot)

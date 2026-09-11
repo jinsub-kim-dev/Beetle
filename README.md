@@ -2,6 +2,7 @@
 
 개인 맞춤형 가계부 시스템. 이 문서는 **실행과 배포 방법**만 다룬다.
 
+- **기능 안내: [FEATURES.md](FEATURES.md)** — 무엇을 할 수 있고 어디서 하는가
 - **환경 구축 절차: [SETUP.md](SETUP.md)** — 처음부터 만들 때, 라즈베리파이에 배포할 때
 - 도메인 요구사항: [BEETLE_PRD.md](BEETLE_PRD.md)
 - 개발 원칙: [CLAUDE.md](CLAUDE.md) · [backend/CLAUDE.md](backend/CLAUDE.md) · [frontend/CLAUDE.md](frontend/CLAUDE.md)
