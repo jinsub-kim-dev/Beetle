@@ -283,22 +283,47 @@ timedatectl status        # NTP service: active 확인
 
 두 파이의 시계가 어긋나면 **소비일·청구일이 하루 틀어진다.** 이 가계부에서는 특히 중요하다.
 
-**② SSH 키 인증**
+**② SSH 접속**
+
+이 구성은 **비밀번호 인증**을 쓴다. 집 안 LAN 전용이고 공유기 포트를 열지 않는 전제다.
+
+배포 스크립트는 SSH 를 여러 번 쓴다 — 접속 확인, 이미지 전송, 원격 재기동, 상태 확인.
+비밀번호 인증이면 그때마다 다시 묻게 되므로, `deploy.sh` 는 **연결 하나를 열어 재사용**한다
+(SSH 멀티플렉싱). 그래서 **비밀번호는 배포 한 번에 한 번만** 입력한다.
+
+| 방식 | ssh 6회 실행 시 인증 횟수 |
+|---|---|
+| 그냥 실행 | 6회 |
+| `deploy.sh` (멀티플렉싱) | **1회** |
+
+(일회용 sshd 컨테이너에 붙여 `Accepted password` 로그를 센 실측값이다)
+
+인증은 **빌드가 시작되기 전에** 끝난다. 10분짜리 빌드가 끝난 뒤에야 입력을 기다리며 멈추는
+일이 없도록 순서를 그렇게 잡았다. 연결은 스크립트가 끝날 때 닫는다.
 
 ```bash
-# 데스크탑에서
-ssh-copy-id swiri@192.168.45.101
-ssh-copy-id swiri@192.168.45.102
+# 접속 확인 — 비밀번호를 묻고 들어가지면 된다
+ssh swiri@192.168.45.101 'hostname; uname -m'
 ```
+
+SSH 포트를 바꿨다면 `SSH_OPTS_EXTRA` 로 넘긴다.
 
 ```bash
-# 각 파이에서 — 비밀번호 로그인 차단
-sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
-sudo systemctl restart ssh
+SSH_OPTS_EXTRA='-p 2222' ./scripts/deploy.sh
 ```
 
-기본 `pi` 계정 대신 개인 계정을 쓰는 편이 낫다. SSH 포트 변경은 LAN 전용이면 필요하지 않다.
-배포 스크립트가 SSH 를 쓰므로 **키 인증은 반드시** 설정한다.
+> **키 인증으로 바꾸고 싶어지면** 아래 두 줄이면 된다. 배포 때 비밀번호를 아예 묻지 않게 되고,
+> 무차별 대입 시도에도 강해진다. 지금 구성에서 필수는 아니다.
+>
+> ```bash
+> ssh-copy-id swiri@192.168.45.101
+> ssh-copy-id swiri@192.168.45.102
+> ```
+>
+> 키로 바꾼 뒤 각 파이에서 비밀번호 로그인을 막으려면:
+> `sudo sed -i 's/^#\?PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config`
+> 후 `sudo systemctl restart ssh`. **키가 확실히 동작하는지 먼저 확인**하고 막는다.
+> 순서를 바꾸면 들어갈 방법이 없어진다.
 
 **③ Docker 설치와 자동 시작**
 
@@ -524,6 +549,18 @@ docker save beetle-backend:$TAG beetle-frontend:$TAG | gzip -1 \
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d
 ```
 
+손으로 할 때는 `ssh` 를 실행할 때마다 비밀번호를 묻는다. 스크립트가 쓰는 연결 재사용을
+직접 쓰려면 먼저 마스터 연결을 열어 둔다. 이후 같은 옵션의 `ssh`·`scp`·`rsync` 는 묻지 않는다.
+
+```bash
+mkdir -p /tmp/beetle-ssh && chmod 700 /tmp/beetle-ssh
+ssh -o ControlMaster=auto -o 'ControlPath=/tmp/beetle-ssh/%r@%h:%p' -o ControlPersist=30m \
+    swiri@192.168.45.101 true          # 여기서 한 번만 묻는다
+
+# 다 끝나면 닫는다
+ssh -o 'ControlPath=/tmp/beetle-ssh/%r@%h:%p' -O exit swiri@192.168.45.101
+```
+
 > 배포가 잦아지면 데스크탑에 로컬 레지스트리(`registry:2`)를 두고 파이가 `pull` 하는
 > 방식으로 바꿀 수 있다. 바뀐 레이어만 전송되고 명령이 짧아진다. 지금 방식은 추가 인프라가
 > 필요 없는 대신 매번 전체 이미지를 보낸다.
@@ -621,6 +658,9 @@ crontab -e
 # 데스크탑에서
 rsync -av swiri@192.168.45.102:~/backup/ ~/beetle-backup/
 ```
+
+비밀번호 인증이므로 실행할 때마다 묻는다. 자주 돌릴 일이면 3.4절의 마스터 연결을 먼저 열어
+두거나, 키 인증으로 바꾼다(2.3절 ②).
 
 ## 4.3 로그와 상태
 
@@ -873,7 +913,7 @@ docker stats --no-stream
 | 백엔드가 `Access denied for user` | 두 파이의 `.env` 계정이 다르거나, DB 서버 계정이 첫 기동 때 다른 값으로 만들어졌다 (1.5절) |
 | 파이가 소스를 빌드하려 든다 | 이미지를 받지 않고 `up` 을 했다. `.env` 의 `TAG` 가 적재한 이미지 태그와 같은지 확인한다 (`docker images \| grep beetle`) |
 | `required variable ... is missing` | 그 호스트의 `.env` 에 필수 값이 없다. 부록 A 참고 |
-| 배포 스크립트가 SSH 에서 멈춘다 | 키 인증이 설정되지 않았다 (2.3절 ②). `ssh -o BatchMode=yes pi@<주소> true` 로 확인한다 |
+| 배포 스크립트가 SSH 에서 멈춘다 | 비밀번호 입력을 기다리는 중일 수 있다. 시작 직후 한 번만 묻는 것이 정상이다 (2.3절 ②). 접속 자체가 안 되면 `ssh swiri@<주소> true` 로 확인한다 |
 | 앱 서버가 느리거나 멈춘다 | `free -h` 로 메모리 확인. 파이에서 빌드하지 않았는지도 본다 |
 | DB 서버가 느리다 | SD 카드의 임의 쓰기 성능 문제일 수 있다. USB SSD 로 옮기는 것이 가장 효과가 크다 |
 | 소비일·청구일이 하루씩 어긋난다 | 두 파이의 시간대와 NTP 동기 확인 (2.3절 ①) |

@@ -10,6 +10,7 @@
 # 환경 변수
 #   APP_HOST      앱 서버 SSH 대상 (기본 swiri@192.168.45.101)
 #   REMOTE_DIR    원격 저장소 경로 (기본 ~/Beetle)
+#   SSH_OPTS_EXTRA  ssh 에 덧붙일 옵션 (예: -p 2222)
 #   TAG           이미지 태그 (기본 git 짧은 해시)
 #   PLATFORM      대상 아키텍처 (기본 linux/arm64)
 #
@@ -29,6 +30,26 @@ APP_HOST="${APP_HOST:-swiri@192.168.45.101}"
 SKIP_BUILD=false
 RESTART=true
 
+# 비밀번호 인증을 쓰는 환경이므로 SSH 연결을 하나로 묶는다(멀티플렉싱).
+# 이렇게 하지 않으면 전송·재기동·상태 확인 단계마다 비밀번호를 다시 묻는다.
+# 첫 연결에서 한 번만 인증하고, 나머지는 그 연결을 재사용한다.
+#
+# 소켓 경로가 길면 유닉스 소켓 길이 제한(약 104자)에 걸리므로 /tmp 에 짧게 만든다.
+SSH_CTL_DIR="/tmp/beetle-ssh-$$"
+mkdir -p "$SSH_CTL_DIR"
+chmod 700 "$SSH_CTL_DIR"
+# ControlPersist 를 넉넉히 둔다. 빌드가 오래 걸려도 마스터 연결이 살아 있어야 한다.
+# 스크립트가 끝나면 아래 trap 이 즉시 닫으므로 실제로 그만큼 남지는 않는다.
+SSH_OPTS=(-o ControlMaster=auto -o "ControlPath=$SSH_CTL_DIR/%r@%h:%p" -o ControlPersist=30m)
+# shellcheck disable=SC2206
+[[ -n "${SSH_OPTS_EXTRA:-}" ]] && SSH_OPTS+=($SSH_OPTS_EXTRA)
+
+close_ssh() {
+  ssh "${SSH_OPTS[@]}" -O exit "$APP_HOST" 2>/dev/null || true
+  rm -rf "$SSH_CTL_DIR"
+}
+trap close_ssh EXIT
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --skip-build) SKIP_BUILD=true; shift ;;
@@ -43,8 +64,11 @@ step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 step "배포 대상: $APP_HOST (태그 $TAG)"
 command -v docker >/dev/null || { echo "docker 가 없습니다" >&2; exit 1; }
 docker buildx version >/dev/null || { echo "docker buildx 가 없습니다" >&2; exit 1; }
-ssh -o BatchMode=yes -o ConnectTimeout=5 "$APP_HOST" true \
-  || { echo "$APP_HOST 에 SSH 로 접속할 수 없습니다 (키 인증 확인)" >&2; exit 1; }
+# 비밀번호를 묻는다면 여기서 한 번만 묻는다. 빌드 전에 인증을 끝내 두어야
+# 10분 뒤에 갑자기 입력을 기다리며 멈추는 일이 없다.
+echo "SSH 연결을 엽니다. 비밀번호를 묻는다면 이번 한 번뿐입니다."
+ssh "${SSH_OPTS[@]}" -o ConnectTimeout=10 "$APP_HOST" true \
+  || { echo "$APP_HOST 에 SSH 로 접속할 수 없습니다" >&2; exit 1; }
 echo "대상=$APP_HOST 경로=$REMOTE_DIR 태그=$TAG 아키텍처=$PLATFORM"
 
 if [[ "$(git status --porcelain)" != "" ]]; then
@@ -69,7 +93,7 @@ step "이미지 전송"
 # 압축해 SSH 로 바로 적재한다. 중간 파일을 남기지 않는다.
 docker save "beetle-backend:$TAG" "beetle-frontend:$TAG" \
   | gzip -1 \
-  | ssh "$APP_HOST" 'gunzip | docker load'
+  | ssh "${SSH_OPTS[@]}" "$APP_HOST" 'gunzip | docker load'
 
 if [[ "$RESTART" == false ]]; then
   step "완료 (재기동은 건너뜀)"
@@ -79,7 +103,7 @@ fi
 
 step "원격 재기동"
 # 배포한 태그를 원격 .env 에 남긴다. 어떤 버전이 떠 있는지 원격에서도 확인된다.
-ssh "$APP_HOST" "
+ssh "${SSH_OPTS[@]}" "$APP_HOST" "
   set -euo pipefail
   cd $REMOTE_DIR
   if grep -q '^TAG=' .env 2>/dev/null; then
@@ -98,5 +122,5 @@ ssh "$APP_HOST" "
 "
 
 step "상태 확인"
-ssh "$APP_HOST" 'curl -fsS http://localhost/actuator/health' && echo
+ssh "${SSH_OPTS[@]}" "$APP_HOST" 'curl -fsS http://localhost/actuator/health' && echo
 echo "배포 완료: $TAG"
