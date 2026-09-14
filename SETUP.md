@@ -8,14 +8,16 @@
 
 | 장비 | 환경 | 주소 | 하는 일 |
 |---|---|---|---|
-| 데스크탑 PC | dev | — | 코드 수정, **빌드**, 배포 실행 |
-| 앱 서버 파이 | prod | `192.168.45.101` | 백엔드 + 프론트엔드 |
+| 데스크탑 PC | dev | — | 코드 수정, 로컬 검증 |
+| 앱 서버 파이 | prod | `192.168.45.101` | 백엔드 + 프론트엔드 (**여기서 빌드·실행**) |
 | DB 서버 파이 | prod | `192.168.45.102` | MySQL |
 
 ![Beetle 배포 구성](docs/architecture.svg)
 
-**빌드는 데스크탑에서만 한다.** JAR 과 정적 파일은 CPU 종류와 무관하므로, 데스크탑에서 만든
-결과물을 파이로 옮긴다. 파이에서 빌드하면 수십 분이 걸린다.
+**빌드는 앱 서버 파이에서 직접 한다.** 파이에서 소스를 받아 `docker compose ... up -d --build`
+하면 멀티스테이지 Dockerfile 이 **컨테이너 안에서 JDK17/Node 로 빌드**한다 — 파이엔 Docker
+하나만 있으면 되고, 데스크탑에 JDK·Node 를 깔거나 이미지를 만들어 옮길 필요가 없다.
+**첫 빌드는 10~20분** 걸릴 수 있으나(파이 CPU), 이후 재빌드는 레이어 캐시로 빨라진다.
 
 SSH 계정은 두 파이 모두 `swiri` 이고 **비밀번호 인증**을 쓴다.
 
@@ -388,23 +390,19 @@ timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.45.102/3306' && echo "열�
 > 보여야 할 것: `열림`
 > `닫힘` 이면 DB 서버의 MySQL 이 떠 있는지, ufw 규칙에 앱 서버 IP 가 맞게 들어갔는지 본다.
 
-### 파일 받기
+### 소스 받기
 
-여기도 소스는 받지 않는다. 애플리케이션은 데스크탑에서 만든 이미지로 돈다.
+여기서 **소스를 직접 빌드**하므로 전체를 받는다. (DB 서버와 달리 부분 체크아웃이 아니다.)
 
 ```bash
-git clone --depth 1 --filter=blob:none --sparse -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
+git clone -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
 ```
 
 ```bash
-git sparse-checkout set --no-cone /docker-compose.yml /docker-compose.prod.yml /docker-compose.app.yml /docker-compose.monitoring.yml /monitoring/
+ls -A
 ```
 
-```bash
-find . -path ./.git -prune -o -type f -print | wc -l
-```
-
-> 보여야 할 것: `11` (compose 4개 + `monitoring/` 7개, 합쳐서 320KB)
+> 보여야 할 것: `backend/` · `frontend/` · `docker-compose*.yml` 등 전체 소스.
 
 ### `.env` 작성
 
@@ -438,54 +436,32 @@ history -c && history -w
 
 > 비밀번호가 셸 히스토리에 남지 않게 지운다 (2-2 와 같다).
 
-### 여기서 `up` 을 하지 않는다
+### 빌드하고 띄운다
 
-이미지가 아직 없다. 첫 기동은 데스크탑에서 한다.
+여기서 **소스를 컨테이너 안에서 빌드**한 뒤 백엔드·프론트엔드를 올린다. (DB 는 앞서 DB 서버에
+띄웠으므로 이 호스트에서는 뜨지 않는다 — `docker-compose.app.yml` 이 제외한다.)
 
 ```bash
-exit
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d --build
 ```
+
+> **첫 빌드는 10~20분** 걸릴 수 있다(파이에서 gradle·npm 을 돌린다). 로그가 조용해도 진행
+> 중이다. 이후 코드만 바뀐 재빌드는 레이어 캐시로 훨씬 빠르다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml ps
+```
+
+> 보여야 할 것: `beetle-backend`·`beetle-frontend` 가 `healthy`.
+> 백엔드는 DB 마이그레이션까지 끝나야 올라오므로 마지막에 뜬다. `starting` 이면 1분 더 기다린다.
 
 ---
 
-# 3부. 첫 배포
+# 3부. 배포 확인
 
-**데스크탑에서** 실행한다.
+앱 서버에서 빌드·기동이 끝났으면 확인한다.
 
-## 3-1. 배포 브랜치 맞추기
-
-파이는 `main` 을 받았다. `main` 이 최신인지 확인한다.
-
-```bash
-git fetch origin && git log --oneline origin/main..origin/dev
-```
-
-> 아무것도 안 나오면 그대로 진행한다. 커밋이 나오면 아래로 맞춘다.
-
-```bash
-git checkout main && git merge --ff-only dev && git push origin main && git checkout dev
-```
-
-## 3-2. 배포
-
-```bash
-./scripts/deploy.sh
-```
-
-**시작하자마자 SSH 비밀번호를 한 번 묻는다. 그 뒤로는 묻지 않는다.**
-
-| 단계 | 대략 |
-|---|---|
-| SSH 연결·환경 확인 | 즉시 |
-| 백엔드 JAR 빌드 | 1~2분 |
-| 프론트엔드 빌드 | 1~2분 |
-| arm64 이미지 2개 생성 | 수 초 |
-| 이미지 전송 (약 190MB) | 네트워크에 따라 |
-| 원격 재기동 + 헬스체크 | 1분 |
-
-> 보여야 할 것: 마지막 줄에 `{"status":"UP"...}` 과 `배포 완료: <태그>`
-
-## 3-3. 확인
+## 3-1. 화면·데이터
 
 브라우저에서 연다.
 
@@ -571,11 +547,18 @@ http://192.168.45.101:3000
 
 ## 재배포
 
-코드를 고친 뒤 데스크탑에서:
+코드를 고쳐 `main` 에 올린 뒤(개발은 `dev` → `main` ff-merge), **앱 서버 파이에서** 최신 소스를
+받아 다시 빌드해 올린다.
 
 ```bash
-./scripts/deploy.sh
+ssh swiri@192.168.45.101
 ```
+
+```bash
+cd Beetle && git pull origin main && docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d --build
+```
+
+> 바뀐 레이어만 다시 빌드하므로 첫 빌드보다 빠르다. 소스가 그대로면 재빌드는 캐시로 즉시 끝난다.
 
 ## 로그와 상태
 
@@ -679,20 +662,14 @@ gunzip -c ~/backup/beetle-20260914.sql.gz | docker exec -i -e MYSQL_PWD="$DB_PAS
 
 ## 되돌리기
 
-데스크탑에서 이전 커밋으로 다시 배포한다.
-
-```bash
-git checkout <이전 커밋> && ./scripts/deploy.sh && git checkout dev
-```
-
-이미지가 파이에 남아 있으면 태그만 바꿔도 된다.
+**앱 서버 파이에서** 이전 커밋으로 체크아웃해 다시 빌드한다.
 
 ```bash
 ssh swiri@192.168.45.101
 ```
 
 ```bash
-cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그>/' .env && docker compose up -d
+cd Beetle && git checkout <이전 커밋> && docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d --build
 ```
 
 > **DB 마이그레이션은 되돌아가지 않는다.** 스키마가 이미 바뀌었다면 이전 버전이 뜨지 않을 수
@@ -716,8 +693,8 @@ cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그
 | `Access denied` 인데 비밀번호는 분명히 맞다 | 비밀번호에 `$` 나 따옴표·공백이 들어갔을 수 있다. `.env` 에서 **조용히 잘린다**(2-0). `sed 's/=.*/=***/' .env` 로는 안 보이니, 안전한 문자로 다시 정하고 2-2 의 되돌리는 방법을 쓴다 |
 | MySQL 이 `exec format error` 로 죽는다 | 32-bit OS 다. `uname -m` 이 `aarch64` 여야 한다 |
 | `required variable ... is missing` | 그 호스트 `.env` 에 값이 빠졌다. 부록 참고 |
-| `unable to prepare context: path ".../backend" not found` | 이미지를 받기 전에 파이에서 `up` 을 했다. 배포는 데스크탑에서 한다 |
-| 배포 스크립트가 멈춰 있다 | 비밀번호 입력을 기다리는 중일 수 있다. 시작 직후 한 번 묻는 것이 정상이다 |
+| `unable to prepare context: path ".../backend" not found` | 소스를 다 받지 않았다. 앱 서버는 부분 체크아웃이 아니라 **전체 clone** 이어야 한다(2-3) |
+| 첫 빌드가 너무 오래 걸린다 | 파이에서 gradle·npm 을 돌리므로 10~20분은 정상이다. 메모리 부족(OOM)으로 죽으면 swap 을 늘리거나 재시도한다 |
 | 소비일·청구일이 하루씩 어긋난다 | 두 파이의 시간대와 NTP 확인 (2-1) |
 | 상태 화면의 `DB 서버 머신` 이 계속 중단 | 앱 서버 `.env` 의 `DB_NODE_IP` 가 없거나 틀렸다. **호스트명이 아니라 IP** 여야 한다 |
 | 상태 화면의 `CPU 온도` 가 비어 있다 | 온도 센서가 없는 환경이다. 파이에서는 나온다 |
@@ -741,7 +718,6 @@ cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그
 | `DB_BIND` | — | — | 선택 | `0.0.0.0` |
 | `FRONTEND_PORT` | 선택 | 선택 | — | 로컬 `5173` · 배포 `80` |
 | `BACKEND_PORT` | 선택 | — | — | `8080` |
-| `TAG` | — | 자동 | — | `deploy.sh` 가 기록한다 |
 | `COMPOSE_FILE` | — | 선택 | 선택 | — |
 | `DB_NODE_IP` | — | 선택 | — | `127.0.0.1` (모니터링용, **IP** 로 적는다) |
 | `GRAFANA_PORT` | 선택 | 선택 | — | `3000` |

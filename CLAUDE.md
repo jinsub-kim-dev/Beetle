@@ -38,10 +38,12 @@ prod 는 한 호스트에 전부 올릴 수도 있고, **서버와 DB 를 나눌
 | 앱 서버 | `docker-compose.app.yml` | 백엔드·프론트엔드. `DB_HOST`·`DB_PORT_TARGET` 필수 |
 | DB 서버 | `docker-compose.db.yml` | MySQL 만. 앱 서버가 붙을 포트를 노출 |
 
-**빌드는 개발 머신에서만 합니다.** JAR 과 `dist` 는 아키텍처와 무관하므로, 네이티브로
-빌드한 산출물을 `Dockerfile.dist`(COPY 전용)로 arm64 이미지에 담습니다. 소스를 컨테이너
-안에서 빌드하는 `Dockerfile` 은 로컬 개발용이며, 라즈베리파이에서 쓰면 매우 느립니다.
-`scripts/deploy.sh` 가 빌드·전송·재기동을 수행합니다.
+**빌드는 배포 대상(앱 서버 파이)에서 직접 합니다.** 파이에서 소스를 받아
+`docker compose ... up -d --build` 하면 멀티스테이지 `Dockerfile` 이 **컨테이너 안에서 arm64
+네이티브로** 빌드합니다. 파이엔 Docker 만 있으면 되고, 데스크탑에 JDK·Node 를 두거나 이미지를
+옮기지 않습니다. 첫 빌드는 10~20분 걸리나 이후 재빌드는 레이어 캐시로 빨라집니다.
+(구 방식인 데스크탑 크로스빌드 → 이미지 전송 스크립트 `scripts/deploy.sh` 와 COPY 전용
+`Dockerfile.dist` 는 현재 쓰지 않습니다.)
 
 ### 2.1 환경별 차이
 
