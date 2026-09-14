@@ -374,22 +374,26 @@ DB 서버는 자동 재부팅을 켜지 않는 편이 안전하다. 재부팅 �
 **① 저장소와 `.env`**
 
 ```bash
-git clone https://github.com/jinsub-kim-dev/Beetle.git
+git clone -b main https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
-cp .env.example .env
-chmod 600 .env
 ```
 
+**`.env.example` 을 복사하지 않는다.** 그 파일은 로컬 기준값(`DB_PORT=13306`,
+`FRONTEND_PORT=5173`)이라 배포 호스트에 그대로 쓰면 포트가 어긋난다. 필요한 값만 새로 적는다.
+
 ```bash
-# .env — DB 서버
+cat > .env <<'EOF'
 MYSQL_ROOT_PASSWORD=<직접 생성한 값>
 DB_NAME=beetle
 DB_USER=beetle
 DB_PASSWORD=<직접 생성한 값>
-
-DB_PORT=3306          # 앱 서버가 접속할 포트
-# DB_BIND=0.0.0.0     # 특정 인터페이스에만 열려면 그 주소
+DB_PORT=3306
+EOF
+chmod 600 .env
 ```
+
+`DB_BIND` 은 지정하지 않으면 `0.0.0.0` 이다. 특정 인터페이스에만 열려면 그 주소를 넣는다.
+포트를 여는 만큼 방화벽으로 앱 서버만 허용해야 한다(2.3절 ④).
 
 > **비밀번호는 첫 기동 때 확정된다**(1.5절). 처음부터 실제로 쓸 값을 넣는다.
 > `DB_NAME`·`DB_USER`·`DB_PASSWORD` 는 **앱 서버의 `.env` 와 같아야 한다.**
@@ -425,25 +429,26 @@ nc -vz 192.168.45.102 3306
 **① 저장소와 `.env`**
 
 ```bash
-git clone https://github.com/jinsub-kim-dev/Beetle.git
+git clone -b main https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
-cp .env.example .env
-chmod 600 .env
 ```
 
+여기서도 `.env.example` 을 복사하지 않는다(2.4절 참고).
+
 ```bash
-# .env — 앱 서버
+cat > .env <<'EOF'
 DB_NAME=beetle
 DB_USER=beetle
 DB_PASSWORD=<DB 서버와 동일한 값>
-
-DB_HOST=192.168.45.102      # DB 서버 주소
-DB_PORT_TARGET=3306       # DB 서버가 노출한 포트
-
+DB_HOST=192.168.45.102
+DB_PORT_TARGET=3306
 FRONTEND_PORT=80
+EOF
+chmod 600 .env
 ```
 
 루트 비밀번호는 필요하지 않다. 이 호스트는 MySQL 을 띄우지 않는다.
+모니터링을 함께 올릴 거라면 5.3절의 값을 여기에 더한다.
 
 **② 여기서 `up` 을 하지 않는다.** 이미지를 받기 전에 기동하면 파이가 소스를 빌드하려 든다.
 첫 기동은 데스크탑에서 배포 스크립트로 한다(3부).
