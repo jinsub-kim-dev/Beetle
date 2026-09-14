@@ -374,13 +374,20 @@ DB 서버는 자동 재부팅을 켜지 않는 편이 안전하다. 재부팅 �
 
 **① 저장소와 `.env`**
 
+DB 서버에는 **compose 파일만** 받는다. 애플리케이션 소스는 이 호스트에서 쓰지 않는다.
+
 ```bash
-git clone -b main https://github.com/jinsub-kim-dev/Beetle.git
+git clone --depth 1 --filter=blob:none --sparse -b main https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
+git sparse-checkout set --no-cone /docker-compose.yml /docker-compose.prod.yml /docker-compose.db.yml /docker-compose.db-monitoring.yml
 ```
 
+전체를 받으면 약 8MB, 이 방식은 264KB 다. 크기보다 **쓰지 않는 코드를 DB 서버에 두지
+않는다**는 점이 이유다. 갱신은 그대로 `git pull` 로 하고, compose 파일이 늘면 위 목록에 더한다.
+
 **`.env.example` 을 복사하지 않는다.** 그 파일은 로컬 기준값(`DB_PORT=13306`,
-`FRONTEND_PORT=5173`)이라 배포 호스트에 그대로 쓰면 포트가 어긋난다. 필요한 값만 새로 적는다.
+`FRONTEND_PORT=5173`)이라 배포 호스트에 그대로 쓰면 포트가 어긋난다. (부분 체크아웃에는
+아예 포함되지 않는다.) 필요한 값만 새로 적는다.
 
 ```bash
 cat > .env <<'EOF'

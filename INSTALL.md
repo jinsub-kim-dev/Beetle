@@ -126,10 +126,30 @@ docker ps && docker compose version
 ## 1.5 저장소와 `.env`
 
 ```bash
-git clone -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
+git clone --depth 1 --filter=blob:none --sparse -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
 ```
 
+```bash
+git sparse-checkout set --no-cone /docker-compose.yml /docker-compose.prod.yml /docker-compose.db.yml /docker-compose.db-monitoring.yml
+```
+
+```bash
+ls -A
+```
+
+compose 파일 4개와 `.git` 만 있으면 된다. **DB 서버에 애플리케이션 소스는 필요 없다.**
+백엔드·프론트엔드는 이 호스트에서 돌지 않는다.
+
+| 받는 방식 | 디스크 |
+|---|---|
+| 전체 clone | 약 8MB (작업트리 2.4MB + 이력 5.6MB) |
+| 위 방식 | **264KB** |
+
+크기보다 중요한 것은 **쓰지 않는 코드를 DB 서버에 두지 않는다**는 점이다. 갱신은 그대로
+`git pull` 로 한다. 나중에 compose 파일이 늘면 위 `sparse-checkout` 목록에 더한다.
+
 **`.env.example` 을 복사하지 않는다.** 로컬 기준값(`DB_PORT=13306`)이라 포트가 어긋난다.
+받아 온 파일에 `.env.example` 은 없으므로 아래처럼 직접 적는다.
 
 아래에서 `<...>` 두 곳을 0.1 의 값으로 바꿔 붙여넣는다.
 
