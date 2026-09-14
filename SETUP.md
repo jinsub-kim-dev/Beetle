@@ -128,6 +128,64 @@ cd frontend && npm run check
 
 **DB 서버를 먼저 세운다.** 앱 서버가 먼저 뜨면 DB 를 못 찾아 재시작을 반복한다.
 
+## 2-0. 먼저 정할 것 — 비밀번호 2개
+
+**MySQL 은 첫 기동 때 계정을 확정한다.** 그 뒤에는 `.env` 를 고쳐도 무시하므로, 띄우기 전에
+정해 둔다. 어느 장비에서 정하든 상관없다. 메모장에 적어 두면 된다.
+
+### 두 비밀번호는 서로 다른 계정이다
+
+| | `MYSQL_ROOT_PASSWORD` | `DB_PASSWORD` |
+|---|---|---|
+| 계정 | `root` | `beetle` |
+| 권한 | MySQL **서버 전체**. 계정 생성·삭제, 서버 종료까지 | `beetle` **데이터베이스 하나 안에서만** |
+| 쓰는 주체 | 사람 (관리 작업) | 백엔드 애플리케이션 |
+| 두는 곳 | **DB 서버에만** | **두 파이 모두 같은 값** |
+
+실제로 부여되는 권한을 보면 차이가 분명하다.
+
+```
+root    GRANT ALL ... ON *.* TO `root`@`localhost` WITH GRANT OPTION
+beetle  GRANT ALL PRIVILEGES ON `beetle`.* TO `beetle`@`%`
+```
+
+`*.*` 는 모든 데이터베이스라는 뜻이다. `beetle` 계정은 자기 DB 밖으로 아무것도 못 한다.
+
+**두 값을 같게 정하면 안 된다.** `DB_PASSWORD` 는 앱 서버의 `.env` 에도 들어가는데, 그 값이
+루트 비밀번호와 같으면 앱 서버가 뚫렸을 때 DB 서버 전체를 내주게 된다. 앱 서버에 루트
+비밀번호를 두지 않는 구조 자체가 무의미해진다.
+
+### 직접 정해도 된다 — 쓰면 안 되는 문자만 피한다
+
+`.env` 파일의 파싱 규칙 때문에 **조용히 잘리는 문자**가 있다. 실제로 넣어 보고 확인한 결과다.
+
+| `.env` 에 적은 값 | 실제로 전달되는 값 |
+|---|---|
+| `Plain_Abc-123.xyz` | `Plain_Abc-123.xyz` ✅ |
+| `Has$Dollar` | **`Has`** ❌ |
+| `Has Space` (공백) | 셸에서 읽을 때 빈 값 ❌ |
+| `Has"Quote` · `Has'Apostrophe` | 셸에서 읽을 때 빈 값 ❌ |
+| `` Has`Backtick` `` | **`Has`** ❌ |
+
+`$` 가 가장 위험하다. **에러 없이 그냥 잘린다.** `MyP$ssw0rd` 로 정했다고 믿지만 MySQL 에는
+`MyP` 가 저장되고, 나중에 전체를 입력하면 `Access denied` 가 난다. 원인을 찾기 어렵다.
+
+> **안전한 문자:** 영문 대소문자 · 숫자 · `-` `_` `.` `!` `#` `%`
+> 이 범위에서 **12자 이상**으로 정한다. 예: `Beetle-Home-2026.db`
+
+굳이 특수문자를 쓰려면 작은따옴표로 감싸면 된다(`DB_PASSWORD='Has$Dollar'`). 다만 이 파일은
+백업 스크립트 등 여러 곳에서 읽으므로 안전한 문자만 쓰는 편이 낫다.
+
+### 직접 정하기 싫으면
+
+무작위로 만들어 준다. 위험한 문자를 걸러내므로 그대로 써도 된다.
+
+```bash
+echo "MYSQL_ROOT_PASSWORD: $(openssl rand -base64 18 | tr -d '/+=')"; echo "DB_PASSWORD:         $(openssl rand -base64 18 | tr -d '/+=')"
+```
+
+> 두 값을 적어 둔다. 다음 단계에서 `.env` 에 넣는다.
+
 ## 2-1. 두 대에 공통으로 하는 일
 
 아래 2-1 전체를 **DB 서버에서 한 번, 앱 서버에서 한 번** 실행한다.
@@ -217,16 +275,6 @@ docker ps
 ssh swiri@192.168.45.102
 ```
 
-### 비밀번호 2개 만들기
-
-**먼저 정한다.** MySQL 은 첫 기동 때 계정을 확정하고, 그 뒤에는 `.env` 를 고쳐도 무시한다.
-
-```bash
-echo "MYSQL_ROOT_PASSWORD: $(openssl rand -base64 18 | tr -d '/+=')"; echo "DB_PASSWORD:         $(openssl rand -base64 18 | tr -d '/+=')"
-```
-
-> 두 값을 적어 둔다. `DB_PASSWORD` 는 **앱 서버에도 같은 값**이 들어간다.
-
 ### 파일 받기
 
 소스는 받지 않는다. 여기서 도는 건 MySQL 하나뿐이다.
@@ -247,7 +295,7 @@ ls -A
 
 ### `.env` 작성
 
-아래를 붙여넣되 `<...>` 두 곳을 방금 만든 값으로 바꾼다.
+아래를 붙여넣되 `<...>` 두 곳을 2-0 에서 정한 값으로 바꾼다. **두 값은 서로 달라야 한다.**
 
 ```bash
 cat > .env <<'EOF'
@@ -650,6 +698,7 @@ cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그
 | `ufw enable` 후 SSH 가 끊겼다 | 22 를 열지 않고 켰다. 모니터와 키보드를 붙여 `sudo ufw allow 22/tcp` |
 | 백엔드가 `Communications link failure` 로 재시작 반복 | DB 에 닿지 못한다. 2-3 의 포트 확인, DB 서버 ufw, `.env` 의 `DB_HOST`/`DB_PORT_TARGET` |
 | 백엔드가 `Access denied for user` | 두 `.env` 의 `DB_PASSWORD` 가 다르다. MySQL 은 **첫 기동 값**을 유지하므로 DB 서버 쪽 값에 맞춘다 |
+| `Access denied` 인데 비밀번호는 분명히 맞다 | 비밀번호에 `$` 나 따옴표·공백이 들어갔을 수 있다. `.env` 에서 **조용히 잘린다**(2-0). `sed 's/=.*/=***/' .env` 로는 안 보이니, 안전한 문자로 다시 정하고 2-2 의 되돌리는 방법을 쓴다 |
 | MySQL 이 `exec format error` 로 죽는다 | 32-bit OS 다. `uname -m` 이 `aarch64` 여야 한다 |
 | `required variable ... is missing` | 그 호스트 `.env` 에 값이 빠졌다. 부록 참고 |
 | `unable to prepare context: path ".../backend" not found` | 이미지를 받기 전에 파이에서 `up` 을 했다. 배포는 데스크탑에서 한다 |
@@ -669,8 +718,8 @@ cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그
 |---|:---:|:---:|:---:|---|
 | `DB_NAME` | 선택 | **필수** | **필수** | `beetle` |
 | `DB_USER` | 선택 | **필수** | **필수** | `beetle` |
-| `DB_PASSWORD` | 선택 | **필수** | **필수** | — (두 파이가 같아야 한다) |
-| `MYSQL_ROOT_PASSWORD` | 선택 | — | **필수** | — |
+| `DB_PASSWORD` | 선택 | **필수** | **필수** | — 앱 계정. **두 파이가 같아야 한다** (2-0) |
+| `MYSQL_ROOT_PASSWORD` | 선택 | — | **필수** | — 서버 관리자. **`DB_PASSWORD` 와 달라야 한다** (2-0) |
 | `DB_HOST` | — | **필수** | — | — |
 | `DB_PORT_TARGET` | — | **필수** | — | — |
 | `DB_PORT` | 선택 | — | 선택 | 로컬 `13306` · 배포 `3306` |
@@ -685,6 +734,9 @@ cd Beetle && docker images | grep beetle && sed -i 's/^TAG=.*/TAG=<이전 태그
 | `GRAFANA_ADMIN_PASSWORD` | 선택 | 선택 | — | `admin` |
 
 `.env.example` 은 **로컬 기준값**이다. 파이에 복사하지 않는다.
+
+비밀번호에는 영문·숫자와 `-` `_` `.` `!` `#` `%` 만 쓴다. `$`·공백·따옴표는 `.env` 에서
+조용히 잘린다(2-0).
 
 ---
 
