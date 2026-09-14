@@ -3,8 +3,7 @@
 개인 맞춤형 가계부 시스템. 이 문서는 **실행과 배포 방법**만 다룬다.
 
 - **기능 안내: [FEATURES.md](FEATURES.md)** — 무엇을 할 수 있고 어디서 하는가
-- **설치 순서: [INSTALL.md](INSTALL.md)** — 파이 2대에 올리는 실제 순서 (복붙용)
-- **환경 구축 가이드: [SETUP.md](SETUP.md)** — 왜 그렇게 하는지, 운영·백업·문제 해결
+- **설치 가이드: [SETUP.md](SETUP.md)** — 로컬 실행부터 파이 배포·운영까지, 순서대로
 - 도메인 요구사항: [BEETLE_PRD.md](BEETLE_PRD.md)
 - 개발 원칙: [CLAUDE.md](CLAUDE.md) · [backend/CLAUDE.md](backend/CLAUDE.md) · [frontend/CLAUDE.md](frontend/CLAUDE.md)
 
@@ -71,7 +70,7 @@ docker compose up -d --build
 > 로 죽는다. 계정을 바꿀 거라면 **첫 기동 전에** 정한다.
 
 단계별 절차와 확인 명령, 계정을 이미 만든 뒤에 바꾸는 방법은
-[SETUP.md 1.5절](SETUP.md#15-mysql-최초-구성--자동이다)에 있다.
+[SETUP.md 2-2](SETUP.md#2-2-db-서버-19216845102)에 있다.
 
 ### 2.3 종료와 초기화
 
@@ -176,7 +175,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 > **파이 준비부터 배포·운영까지의 전체 절차는 [SETUP.md](SETUP.md) 에 있다.** 고정 IP,
 > SSH 하드닝, 방화벽, 백업 자동화, 재배포, 되돌리기, 환경 변수 전체 목록을 담았다.
 >
-> **인증이 없다.** 공개 인터넷에 노출하기 전에 [SETUP.md 6부](SETUP.md#6부-공개하기-전에--인증이-없다)
+> **인증이 없다.** 공개 인터넷에 노출하기 전에 [SETUP.md 의 마지막 절](SETUP.md#마지막으로--인증이-없다)
 > 를 읽는다.
 
 ### 모니터링 (선택)
@@ -197,7 +196,7 @@ docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
 `-f docker-compose.override.yml -f docker-compose.monitoring.yml` 로 같은 화면을 띄울 수
 있다(머신이 하나이므로 "DB 서버 머신" 은 중단으로 보인다).
 
-> 자세한 내용은 [SETUP.md 5부](SETUP.md#5부-모니터링--상태-페이지).
+> 자세한 내용은 [SETUP.md 4부](SETUP.md#4부-모니터링-선택).
 
 ---
 

@@ -403,8 +403,7 @@ Beetle/                        # 루트 디렉토리
  ┣ BEETLE_PRD.md               # 전체 프로젝트 기획 및 요구사항 정의서 (도메인 요구사항의 정본)
  ┣ CLAUDE.md                   # 루트 프로젝트(인프라/모노레포/공통 원칙) 가이드
  ┣ README.md                   # 실행 명령 요약과 운영 안내
- ┣ INSTALL.md                  # 설치 순서서 (파이 2대, 복붙용 명령 나열)
- ┣ SETUP.md                    # 환경 구축 가이드 (로컬, 라즈베리파이 배포, 운영, 모니터링)
+ ┣ SETUP.md                    # 설치 가이드 (로컬 실행 -> 파이 배포 -> 모니터링 -> 운영)
  ┣ FEATURES.md                 # 제공 기능 안내 (화면 기준)
  ┣ docs/architecture.svg       # 배포 구성도 (라이트·다크 모두 대응)
  ┣ docs/monitoring.svg         # 모니터링 구성도
