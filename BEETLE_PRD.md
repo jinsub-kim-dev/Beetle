@@ -464,9 +464,13 @@ Beetle/                        # 루트 디렉토리
 
   | 영역 | 로컬(dev) | 배포(prod) |
   |---|---|---|
+  | 도는 장비 | 데스크탑 PC 의 도커 | **라즈베리파이 2대** (앱 서버 · DB 서버) |
   | 백엔드 | `application-dev.yml` (미지정 시 기본) | `application-prod.yml` (`SPRING_PROFILES_ACTIVE=prod`) |
   | 프론트엔드 | `.env.development` | `.env.production` |
   | 컨테이너 | `docker-compose.override.yml` (자동 적용) | `docker-compose.prod.yml` (`-f` 로 명시) |
+
+  **라즈베리파이에서 도는 것은 언제나 prod 입니다.** 파이를 개발용으로 쓰지 않으며, 실험은
+  데스크탑에서 합니다.
 
   배포 환경은 **접속 정보에 기본값을 두지 않아 없으면 기동에 실패**하고, **시드 데이터를
   적용하지 않으며**, API 문서와 관리 엔드포인트(`health`·`prometheus` 제외)를 차단하고,

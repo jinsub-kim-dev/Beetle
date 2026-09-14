@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 340" width="900" height="340"
-     role="img" aria-label="Beetle 배포 구성: 데스크탑 PC 에서 빌드해 앱 서버 파이로 전송하고, 앱 서버 파이가 DB 서버 파이의 MySQL 에 접속한다">
+     role="img" aria-label="Beetle 배포 구성: dev 인 데스크탑 PC 에서 빌드해 prod 인 앱 서버 파이로 전송하고, 앱 서버 파이가 DB 서버 파이의 MySQL 에 접속한다">
   <title>Beetle 배포 구성</title>
-  <desc>데스크탑 PC(코드 수정·빌드·배포 실행), 앱 서버 라즈베리파이(백엔드 + nginx, 80 공개), DB 서버 라즈베리파이(MySQL, 3306 은 앱 서버만 허용)가 같은 공유기 네트워크에 있다.</desc>
+  <desc>데스크탑 PC 는 dev 환경으로 코드 수정·빌드·배포 실행만 하고, 라즈베리파이 2대가 prod 환경이다. 앱 서버 라즈베리파이(백엔드 + nginx, 80 공개)와 DB 서버 라즈베리파이(MySQL, 3306 은 앱 서버만 허용)가 같은 공유기 네트워크에 있다.</desc>
 
   <style>
     /* 기본은 라이트. 배경을 직접 칠하므로 다크 모드 감지가 되지 않는 환경에서도 읽힌다. */
@@ -16,6 +16,8 @@
     .muted  { fill: #6b7684; }
     .arrow  { stroke: #6b7684; stroke-width: 2; fill: none; }
     .arrlbl { fill: #4b5563; font-weight: 600; }
+    .badge  { fill: #6b7684; font-weight: 700; letter-spacing: 0.06em; }
+    .badgep { fill: #4c5da8; font-weight: 700; letter-spacing: 0.06em; }
     text    { font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif; }
 
     @media (prefers-color-scheme: dark) {
@@ -30,6 +32,8 @@
       .muted  { fill: #9198a1; }
       .arrow  { stroke: #9198a1; }
       .arrlbl { fill: #c9d1d9; }
+      .badge  { fill: #9198a1; }
+      .badgep { fill: #8fa0ef; }
     }
   </style>
 
@@ -48,6 +52,7 @@
   <!-- 데스크탑 PC -->
   <rect class="card" x="45" y="112" width="230" height="150" rx="10"/>
   <text class="name" x="65" y="142" font-size="15">데스크탑 PC</text>
+  <text class="badge" x="255" y="142" font-size="11" text-anchor="end">DEV</text>
   <text class="role" x="65" y="170" font-size="13">코드 수정 · 테스트</text>
   <text class="role" x="65" y="192" font-size="13" font-weight="700">빌드 (JAR · dist · 이미지)</text>
   <text class="role" x="65" y="214" font-size="13">배포 실행</text>
@@ -56,6 +61,7 @@
   <!-- 앱 서버 파이 -->
   <rect class="card accent" x="335" y="112" width="230" height="150" rx="10"/>
   <text class="name" x="355" y="142" font-size="15">앱 서버 파이</text>
+  <text class="badgep" x="545" y="142" font-size="11" text-anchor="end">PROD</text>
   <text class="role" x="355" y="170" font-size="13">백엔드 + nginx</text>
   <text class="role" x="355" y="192" font-size="13" font-weight="700">:80 만 공개</text>
   <text class="role" x="355" y="214" font-size="13">nginx 가 /api 프록시</text>
@@ -64,6 +70,7 @@
   <!-- DB 서버 파이 -->
   <rect class="card db" x="625" y="112" width="230" height="150" rx="10"/>
   <text class="name" x="645" y="142" font-size="15">DB 서버 파이</text>
+  <text class="badgep" x="835" y="142" font-size="11" text-anchor="end">PROD</text>
   <text class="role" x="645" y="170" font-size="13">MySQL 8.4</text>
   <text class="role" x="645" y="192" font-size="13" font-weight="700">3306 — 앱 서버만 허용</text>
   <text class="role" x="645" y="214" font-size="13">데이터 보관 · 백업</text>

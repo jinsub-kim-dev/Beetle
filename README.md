@@ -137,10 +137,18 @@ cd frontend && npm run check     # 타입 검사 + 린트 + 테스트
 
 ---
 
-## 3. 배포
+## 3. 배포 (prod)
 
-배포는 **라즈베리파이 2대**(앱 서버 + DB 서버)에 나눠 올리는 구성이다. 빌드는 개발 머신에서
-하고 파이는 받은 이미지를 실행한다.
+**prod 는 라즈베리파이 2대다.** 앱 서버와 DB 서버로 나눠 올리며, 실제 가계부 데이터가 있는
+곳이다. 빌드는 개발 머신에서 하고 파이는 받은 이미지를 실행한다.
+
+| 환경 | 장비 | 주소 |
+|---|---|---|
+| dev | 데스크탑 PC 의 도커 | `localhost` |
+| **prod** | 앱 서버 파이 | `192.168.45.101` |
+| **prod** | DB 서버 파이 | `192.168.45.102` |
+
+파이는 개발용이 아니다. 실험은 데스크탑에서 한다.
 
 ![Beetle 배포 구성](docs/architecture.svg)
 
@@ -192,9 +200,9 @@ docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
 
 ---
 
-## 4. 환경 차이
+## 4. 환경 차이 (dev / prod)
 
-| 항목 | 로컬(dev) | 원격 배포(prod) |
+| 항목 | dev — 데스크탑 | prod — 라즈베리파이 2대 |
 |---|---|---|
 | 백엔드 설정 | `application-dev.yml` (프로필 미지정 시 기본) | `application-prod.yml` (`SPRING_PROFILES_ACTIVE=prod`) |
 | 프론트엔드 설정 | `.env.development` | `.env.production` |
