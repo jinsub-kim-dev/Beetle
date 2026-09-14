@@ -436,12 +436,18 @@ nc -vz 192.168.45.102 3306
 
 **① 저장소와 `.env`**
 
+앱 서버도 **compose 파일과 모니터링 설정만** 받는다. 애플리케이션은 데스크탑에서 만든
+이미지로 돌아가므로 이 호스트에도 소스가 필요 없다(3.1절).
+
 ```bash
-git clone -b main https://github.com/jinsub-kim-dev/Beetle.git
+git clone --depth 1 --filter=blob:none --sparse -b main https://github.com/jinsub-kim-dev/Beetle.git
 cd Beetle
+git sparse-checkout set --no-cone /docker-compose.yml /docker-compose.prod.yml /docker-compose.app.yml /docker-compose.monitoring.yml /monitoring/
 ```
 
-여기서도 `.env.example` 을 복사하지 않는다(2.4절 참고).
+모니터링을 쓰지 않으면 `/docker-compose.monitoring.yml` 과 `/monitoring/` 을 뺀다.
+
+여기서도 `.env.example` 을 복사하지 않는다(2.4절 참고). 부분 체크아웃에는 포함되지 않는다.
 
 ```bash
 cat > .env <<'EOF'
@@ -458,8 +464,11 @@ chmod 600 .env
 루트 비밀번호는 필요하지 않다. 이 호스트는 MySQL 을 띄우지 않는다.
 모니터링을 함께 올릴 거라면 5.3절의 값을 여기에 더한다.
 
-**② 여기서 `up` 을 하지 않는다.** 이미지를 받기 전에 기동하면 파이가 소스를 빌드하려 든다.
-첫 기동은 데스크탑에서 배포 스크립트로 한다(3부).
+**② 여기서 `up` 을 하지 않는다.** 첫 기동은 데스크탑에서 배포 스크립트로 한다(3부).
+
+소스를 받지 않았으므로 실수로 `up` 을 해도 빌드가 시작되지 않고
+`unable to prepare context: path ".../backend" not found` 로 즉시 멈춘다. 파이에서 느린
+빌드가 도는 것보다 낫다.
 
 ---
 
@@ -924,7 +933,7 @@ docker stats --no-stream
 | MySQL 이 `exec format error` 로 죽는다 | 32-bit OS 다. `uname -m` 이 `armv7l` 이면 64-bit OS 로 다시 설치한다 (2.1절) |
 | 백엔드가 `Communications link failure` 로 재시작 반복 | DB 서버에 닿지 못한다. `nc -vz <DB IP> 3306`, ufw 규칙, `.env` 의 `DB_HOST`/`DB_PORT_TARGET` 확인 |
 | 백엔드가 `Access denied for user` | 두 파이의 `.env` 계정이 다르거나, DB 서버 계정이 첫 기동 때 다른 값으로 만들어졌다 (1.5절) |
-| 파이가 소스를 빌드하려 든다 | 이미지를 받지 않고 `up` 을 했다. `.env` 의 `TAG` 가 적재한 이미지 태그와 같은지 확인한다 (`docker images \| grep beetle`) |
+| `unable to prepare context: path ".../backend" not found` | 이미지를 받지 않고 `up` 을 했다. 파이에는 소스가 없으므로 빌드로 넘어가지 않고 여기서 멈춘다. `.env` 의 `TAG` 가 적재한 이미지 태그와 같은지 확인한다 (`docker images \| grep beetle`) |
 | `required variable ... is missing` | 그 호스트의 `.env` 에 필수 값이 없다. 부록 A 참고 |
 | 배포 스크립트가 SSH 에서 멈춘다 | 비밀번호 입력을 기다리는 중일 수 있다. 시작 직후 한 번만 묻는 것이 정상이다 (2.3절 ②). 접속 자체가 안 되면 `ssh swiri@<주소> true` 로 확인한다 |
 | 앱 서버가 느리거나 멈춘다 | `free -h` 로 메모리 확인. 파이에서 빌드하지 않았는지도 본다 |

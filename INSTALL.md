@@ -253,9 +253,23 @@ timeout 3 bash -c 'cat < /dev/null > /dev/tcp/192.168.45.102/3306' && echo "3306
 
 ## 2.6 저장소와 `.env`
 
+DB 서버와 마찬가지로 **compose 파일과 모니터링 설정만** 받는다. 애플리케이션은 데스크탑에서
+만든 이미지로 돌아가므로 이 호스트에도 소스가 필요 없다.
+
 ```bash
-git clone -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
+git clone --depth 1 --filter=blob:none --sparse -b main https://github.com/jinsub-kim-dev/Beetle.git && cd Beetle
 ```
+
+```bash
+git sparse-checkout set --no-cone /docker-compose.yml /docker-compose.prod.yml /docker-compose.app.yml /docker-compose.monitoring.yml /monitoring/
+```
+
+```bash
+find . -path ./.git -prune -o -type f -print | sort
+```
+
+compose 파일 4개와 `monitoring/` 아래 7개, 합쳐서 320KB 다. 모니터링을 쓰지 않을 거면
+`/docker-compose.monitoring.yml` 과 `/monitoring/` 을 목록에서 빼도 된다.
 
 `DB_PASSWORD` 는 **DB 서버와 똑같은 값**이어야 한다. 루트 비밀번호는 넣지 않는다.
 
@@ -277,8 +291,15 @@ chmod 600 .env && cat .env | sed 's/=.*/=***/'
 
 ## 2.7 여기서 `up` 을 하지 않는다
 
-이미지가 아직 없다. 이 상태로 `docker compose up` 을 하면 **파이가 소스를 빌드하려 든다.**
-느리고 메모리가 모자란다. 첫 기동은 데스크탑에서 한다.
+이미지가 아직 없다. 첫 기동은 데스크탑에서 배포 스크립트로 한다(3).
+
+소스를 받지 않았으므로 실수로 `up` 을 해도 파이가 빌드를 시작하지는 못하고 이렇게 끝난다.
+
+```
+unable to prepare context: path ".../backend" not found
+```
+
+느린 빌드가 도는 것보다 즉시 실패하는 편이 낫다.
 
 ```bash
 exit
@@ -381,7 +402,7 @@ http://192.168.45.101:3000
 | 백엔드가 `Access denied for user` | 두 `.env` 의 `DB_PASSWORD` 가 다르다. DB 는 **첫 기동 값**을 유지하므로 DB 서버 쪽 값에 맞춘다. 정말 바꿔야 하면 [SETUP.md 1.5](SETUP.md#15-mysql-최초-구성--자동이다) |
 | MySQL 이 `exec format error` 로 죽는다 | 32-bit OS 다. `uname -m` 이 `aarch64` 여야 한다 |
 | `required variable ... is missing` | 그 호스트 `.env` 에 값이 빠졌다. [SETUP.md 부록 A](SETUP.md#부록-a-환경-변수) |
-| 파이가 소스를 빌드하려 든다 | 이미지를 받기 전에 `up` 을 했다 (2.7). `.env` 의 `TAG` 가 적재한 이미지와 같은지 본다 |
+| `unable to prepare context: path ".../backend" not found` | 이미지를 받기 전에 `up` 을 했다 (2.7). `.env` 의 `TAG` 가 적재한 이미지와 같은지 본다 (`docker images \| grep beetle`) |
 | 배포 스크립트가 멈춰 있다 | 비밀번호 입력을 기다리는 중일 수 있다. 시작 직후 한 번 묻는 것이 정상이다 |
 | 상태 페이지의 `DB 서버 머신` 이 계속 중단 | 앱 서버 `.env` 의 `DB_NODE_IP` 가 없거나 틀렸다. **호스트명이 아니라 IP** 여야 한다 |
 
