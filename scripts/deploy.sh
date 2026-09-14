@@ -5,10 +5,10 @@
 # 개발 머신에서 실행한다. 파이에서는 빌드하지 않는다. JAR 과 dist 는 아키텍처와
 # 무관하므로, 여기서 네이티브로 빌드한 산출물을 arm64 이미지에 담아 옮긴다.
 #
-#   APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+#   ./scripts/deploy.sh
 #
 # 환경 변수
-#   APP_HOST      (필수) 앱 서버 SSH 대상. 예: pi@192.168.0.10
+#   APP_HOST      앱 서버 SSH 대상 (기본 swiri@192.168.45.101)
 #   REMOTE_DIR    원격 저장소 경로 (기본 ~/Beetle)
 #   TAG           이미지 태그 (기본 git 짧은 해시)
 #   PLATFORM      대상 아키텍처 (기본 linux/arm64)
@@ -24,6 +24,8 @@ cd "$REPO_ROOT"
 REMOTE_DIR="${REMOTE_DIR:-~/Beetle}"
 PLATFORM="${PLATFORM:-linux/arm64}"
 TAG="${TAG:-$(git rev-parse --short HEAD)}"
+# 배포 대상은 한 대로 고정되어 있다. 다른 호스트에 보내려면 APP_HOST 로 덮어쓴다.
+APP_HOST="${APP_HOST:-swiri@192.168.45.101}"
 SKIP_BUILD=false
 RESTART=true
 
@@ -35,14 +37,10 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [[ -z "${APP_HOST:-}" ]]; then
-  echo "APP_HOST 를 설정해야 합니다. 예: APP_HOST=pi@192.168.0.10 $0" >&2
-  exit 2
-fi
-
 step() { printf '\n\033[1m==> %s\033[0m\n' "$1"; }
 
-step "사전 확인"
+# 어디로 보내는지 먼저 눈에 보이게 한다.
+step "배포 대상: $APP_HOST (태그 $TAG)"
 command -v docker >/dev/null || { echo "docker 가 없습니다" >&2; exit 1; }
 docker buildx version >/dev/null || { echo "docker buildx 가 없습니다" >&2; exit 1; }
 ssh -o BatchMode=yes -o ConnectTimeout=5 "$APP_HOST" true \

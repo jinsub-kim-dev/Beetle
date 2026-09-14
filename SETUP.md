@@ -231,6 +231,10 @@ free -h
 df -h /
 ```
 
+**이 구성의 두 파이는 Ubuntu Server (arm64) 로 설치되어 있다.** OS 배포판은 arm64 이고
+도커가 돌면 무엇이든 상관없다. 다만 Raspberry Pi OS 를 전제로 한 명령 하나가 다르다 —
+`vcgencmd` 는 Raspberry Pi OS 에만 기본 설치되므로, Ubuntu 에서는 4.3절의 대체 명령을 쓴다.
+
 이미지의 아키텍처 지원은 아래와 같다(직접 조회한 값이다).
 
 | 이미지 | 지원 플랫폼 |
@@ -246,12 +250,16 @@ df -h /
 
 앱 서버는 DB 서버의 주소를 설정 파일에 적어 두므로 **DB 서버의 IP 고정은 필수**다.
 
-예시로 아래 주소를 쓴다. 실제 값으로 바꿔 읽으면 된다.
+**이 구성의 실제 주소**다. 문서 전체에서 이 값을 그대로 쓴다.
 
-| 장비 | 주소 |
-|---|---|
-| 앱 서버 파이 | `192.168.0.10` |
-| DB 서버 파이 | `192.168.0.20` |
+| 장비 | 주소 | 호스트명 |
+|---|---|---|
+| 앱 서버 파이 | `192.168.45.101` | `beetle-app` |
+| DB 서버 파이 | `192.168.45.102` | `beetle-db` |
+| 데스크탑 PC | DHCP (고정 불필요) | — |
+
+데스크탑은 접속하는 쪽이라 주소가 바뀌어도 된다. 다만 **DB 서버의 방화벽이 앱 서버 IP 만
+허용**하므로(2.3절 ④), 데스크탑에서 DB 에 직접 붙으려면 규칙을 따로 열어야 한다.
 
 **호스트명**도 구분해 둔다. 두 대를 SSH 로 오갈 때 헷갈리지 않는다.
 
@@ -274,8 +282,8 @@ timedatectl status        # NTP service: active 확인
 
 ```bash
 # 데스크탑에서
-ssh-copy-id pi@192.168.0.10
-ssh-copy-id pi@192.168.0.20
+ssh-copy-id swiri@192.168.45.101
+ssh-copy-id swiri@192.168.45.102
 ```
 
 ```bash
@@ -315,7 +323,7 @@ sudo ufw allow 80/tcp
 
 ```bash
 # DB 서버에서 — 앱 서버 IP 만 허용
-sudo ufw allow from 192.168.0.10 to any port 3306 proto tcp
+sudo ufw allow from 192.168.45.101 to any port 3306 proto tcp
 ```
 
 **⑤ 보안 업데이트**
@@ -331,7 +339,7 @@ DB 서버는 자동 재부팅을 켜지 않는 편이 안전하다. 재부팅 �
 > 드라이버에 `max-size=10m, max-file=3` 으로 묶여 있다. 제한이 없으면 SD 카드가 조용히
 > 가득 차는 사고가 난다.
 
-## 2.4 DB 서버 파이 (`192.168.0.20`)
+## 2.4 DB 서버 파이 (`192.168.45.102`)
 
 **① 저장소와 `.env`**
 
@@ -376,13 +384,13 @@ docker exec -e MYSQL_PWD="$DB_PASSWORD" beetle-mysql mysql -u"$DB_USER" -e "SHOW
 
 ```bash
 # 앱 서버에서 — 접속 경로가 열렸는지
-nc -vz 192.168.0.20 3306
+nc -vz 192.168.45.102 3306
 ```
 
 스키마는 아직 비어 있다. **앱 서버의 백엔드가 처음 뜰 때 Flyway 가 만든다.** 배포 환경은
 시드를 적용하지 않으므로 빈 가계부로 시작한다.
 
-## 2.5 앱 서버 파이 (`192.168.0.10`)
+## 2.5 앱 서버 파이 (`192.168.45.101`)
 
 **① 저장소와 `.env`**
 
@@ -399,7 +407,7 @@ DB_NAME=beetle
 DB_USER=beetle
 DB_PASSWORD=<DB 서버와 동일한 값>
 
-DB_HOST=192.168.0.20      # DB 서버 주소
+DB_HOST=192.168.45.102      # DB 서버 주소
 DB_PORT_TARGET=3306       # DB 서버가 노출한 포트
 
 FRONTEND_PORT=80
@@ -430,8 +438,17 @@ FRONTEND_PORT=80
 ## 3.2 배포
 
 ```bash
-APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+./scripts/deploy.sh
 ```
+
+배포 대상은 `swiri@192.168.45.101` 로 스크립트에 박혀 있다. 다른 호스트에 보내려면 덮어쓴다.
+
+```bash
+APP_HOST=swiri@<다른 주소> ./scripts/deploy.sh
+```
+
+스크립트는 시작할 때 **어디로 보내는지와 태그를 먼저 출력한다.** 엉뚱한 곳에 보내는 일을
+막기 위해서다.
 
 스크립트가 순서대로 수행한다.
 
@@ -468,16 +485,16 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 
 - 프로필이 `prod` 이고 `Database:` 줄이 **DB 서버 주소**를 가리켜야 한다
 - 세 컨테이너 모두 `(healthy)` 여야 한다
-- 다른 기기에서 `http://192.168.0.10` 으로 접속한다
+- 다른 기기에서 `http://192.168.45.101` 으로 접속한다
 - 외부에 열리는 것은 앱 서버의 80 하나뿐이다. 백엔드 포트는 노출하지 않고 nginx 가
   `/api` 를 프록시한다
 
 배포 환경에서는 아래가 **404** 여야 정상이다. 스펙과 내부 구조를 드러낼 이유가 없다.
 
 ```bash
-curl -o /dev/null -w '%{http_code}\n' http://192.168.0.10/swagger-ui.html   # 404
-curl -o /dev/null -w '%{http_code}\n' http://192.168.0.10/v3/api-docs       # 404
-curl -o /dev/null -w '%{http_code}\n' http://192.168.0.10/actuator/env      # 404
+curl -o /dev/null -w '%{http_code}\n' http://192.168.45.101/swagger-ui.html   # 404
+curl -o /dev/null -w '%{http_code}\n' http://192.168.45.101/v3/api-docs       # 404
+curl -o /dev/null -w '%{http_code}\n' http://192.168.45.101/actuator/env      # 404
 ```
 
 ## 3.4 스크립트 없이 배포하기
@@ -494,7 +511,7 @@ docker buildx build --platform linux/arm64 -f backend/Dockerfile.dist  -t beetle
 docker buildx build --platform linux/arm64 -f frontend/Dockerfile.dist -t beetle-frontend:$TAG --load ./frontend
 
 docker save beetle-backend:$TAG beetle-frontend:$TAG | gzip -1 \
-  | ssh pi@192.168.0.10 'gunzip | docker load'
+  | ssh swiri@192.168.45.101 'gunzip | docker load'
 ```
 
 ```bash
@@ -515,7 +532,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compos
 ```bash
 # 데스크탑에서
 git pull origin main        # 또는 작업 브랜치
-APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
 - **파이에서 `git pull` 만 해도 반영되지 않는다.** 이미지가 바뀌어야 한다
@@ -597,7 +614,7 @@ crontab -e
 
 ```bash
 # 데스크탑에서
-rsync -av pi@192.168.0.20:~/backup/ ~/beetle-backup/
+rsync -av swiri@192.168.45.102:~/backup/ ~/beetle-backup/
 ```
 
 ## 4.3 로그와 상태
@@ -626,10 +643,18 @@ docker compose down                   # 종료 (데이터 유지)
 파이 특유의 상태도 함께 본다.
 
 ```bash
-vcgencmd measure_temp       # 온도
-vcgencmd get_throttled      # 0x0 이 정상. 스로틀링 여부
+# 온도 (어느 배포판에서나 된다. 밀리도 단위이므로 1000 으로 나눈다)
+awk '{printf "%.1f°C\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
 df -h /                     # 저장장치 여유
 free -h
+```
+
+Raspberry Pi OS 라면 아래가 더 편하다. **Ubuntu 에는 기본 설치되어 있지 않다**
+(`sudo apt install libraspberrypi-bin` 으로 넣을 수 있다).
+
+```bash
+vcgencmd measure_temp
+vcgencmd get_throttled      # 0x0 이 정상. 스로틀링 여부
 ```
 
 ## 4.4 자동 시작과 재부팅
@@ -646,7 +671,7 @@ free -h
 ```bash
 # 데스크탑에서 — 이전 커밋으로 다시 배포
 git checkout <이전 커밋>
-APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
 이전에 배포한 이미지가 파이에 남아 있으면 태그만 바꿔도 된다.
@@ -709,14 +734,14 @@ docker compose -f docker-compose.db-monitoring.yml -p beetle-monitoring up -d
 
 ```bash
 # DB 서버에서
-sudo ufw allow from 192.168.0.10 to any port 9100 proto tcp
+sudo ufw allow from 192.168.45.101 to any port 9100 proto tcp
 ```
 
 확인한다.
 
 ```bash
 # 앱 서버에서
-curl -s http://192.168.0.20:9100/metrics | head -3
+curl -s http://192.168.45.102:9100/metrics | head -3
 ```
 
 ## 5.3 앱 서버 파이에 올리기
@@ -725,7 +750,7 @@ curl -s http://192.168.0.20:9100/metrics | head -3
 
 ```bash
 # .env — 앱 서버 (기존 값에 아래를 추가)
-DB_NODE_IP=192.168.0.20
+DB_NODE_IP=192.168.45.102
 GRAFANA_PORT=3000
 GRAFANA_ANONYMOUS=true
 GRAFANA_ADMIN_PASSWORD=<바꿀 비밀번호>
@@ -747,7 +772,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 `.env` 에 `COMPOSE_FILE` 을 쓰고 있다면(4.3절) 그 줄 끝에 `:docker-compose.monitoring.yml`
 을 붙이고 `docker compose up -d` 만 실행한다.
 
-브라우저에서 `http://192.168.0.10:3000` 을 연다. 로그인 없이 `Beetle 상태` 대시보드가
+브라우저에서 `http://192.168.45.101:3000` 을 연다. 로그인 없이 `Beetle 상태` 대시보드가
 첫 화면으로 열린다.
 
 ## 5.4 화면 읽는 법
@@ -768,7 +793,7 @@ docker compose -f docker-compose.yml -f docker-compose.prod.yml \
 
 `CPU 온도` 는 온도 센서가 있는 환경에서만 나온다. 라즈베리파이에서는 보이고, 도커 데스크톱의
 가상 머신에서는 비어 있다. 80도를 넘으면 스로틀링이 걸려 성능이 떨어진다
-(`vcgencmd get_throttled` 로도 확인할 수 있다, 4.3절).
+(스로틀링 여부는 Raspberry Pi OS 에서 `vcgencmd get_throttled` 로 확인한다, 4.3절).
 
 ## 5.5 로컬에서 확인하기
 
@@ -848,7 +873,7 @@ docker stats --no-stream
 | DB 서버가 느리다 | SD 카드의 임의 쓰기 성능 문제일 수 있다. USB SSD 로 옮기는 것이 가장 효과가 크다 |
 | 소비일·청구일이 하루씩 어긋난다 | 두 파이의 시간대와 NTP 동기 확인 (2.3절 ①) |
 | 재부팅 후 안 올라온다 | `sudo systemctl enable docker` 확인 |
-| 온도가 높거나 성능이 떨어진다 | `vcgencmd get_throttled` 가 `0x0` 이 아니면 전원·냉각을 점검한다 |
+| 온도가 높거나 성능이 떨어진다 | `/sys/class/thermal/thermal_zone0/temp` 로 온도를 본다 (4.3절). Raspberry Pi OS 면 `vcgencmd get_throttled` 가 `0x0` 이 아닐 때 전원·냉각을 점검한다 |
 | 상태 화면의 "DB 서버 머신" 이 계속 중단이다 | 앱 서버 `.env` 의 `DB_NODE_IP` 가 없거나 틀렸다. **호스트 이름이 아니라 IP 여야 한다** (5.3절). DB 서버의 ufw 가 9100 을 막고 있는지도 본다 |
 | 상태 화면에 애플리케이션 패널만 비어 있다 | 모니터링을 앱과 **다른 compose 프로젝트**로 띄웠다. 같은 프로젝트여야 `backend:8080` 에 닿는다 (5.3절) |
 | 상태 화면의 `CPU 온도` 가 비어 있다 | 온도 센서가 없는 환경이다. 라즈베리파이에서는 나온다 (5.4절) |
@@ -898,7 +923,7 @@ cd backend && ./gradlew check    # 백엔드 검증
 cd frontend && npm run check     # 프론트엔드 검증
 
 # 배포 (데스크탑에서)
-APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+./scripts/deploy.sh
 
 # 앱 서버 파이
 docker compose -f docker-compose.yml -f docker-compose.prod.yml -f docker-compose.app.yml up -d

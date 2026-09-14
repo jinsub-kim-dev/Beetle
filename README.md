@@ -146,7 +146,7 @@ cd frontend && npm run check     # 타입 검사 + 린트 + 테스트
 
 ```bash
 # 개발 머신에서 — 빌드·전송·재기동을 한 번에
-APP_HOST=pi@192.168.0.10 ./scripts/deploy.sh
+./scripts/deploy.sh
 ```
 
 ```bash
